@@ -1,0 +1,82 @@
+homeassistant:
+  auth_providers:
+    - type: homeassistant
+  name: Home
+  latitude: !secret latitude_home
+  longitude: !secret longitude_home
+  unit_system: metric
+  temperature_unit: C
+  currency: USD
+  language: en
+  country: TH
+  time_zone: "Asia/Bangkok"
+  #external_url: "http://shuu02.ddns.net:8123"
+  internal_url: "http://192.168.1.10:8123"
+  #customize:
+  #customize_domain:
+  #customize_glob:
+  allowlist_external_dirs:
+    #- "/usr/var/dumping-ground"
+    - "/tmp"
+  allowlist_external_urls:
+    - "http://images.com/image1.png"
+  media_dirs:
+    media: "/media"
+    recordings: "/mnt"
+
+# Default integrations from default_config:
+#assist_pipeline:
+#backup:
+bluetooth:
+config:
+#cloud:
+#conversation:
+#dhcp:
+#energy:
+history:
+homeassistant_alerts:
+image_upload:
+logbook:
+#map:
+#media_source:
+mobile_app:
+#my:
+#ssdp:
+#stream:
+sun:
+usb:
+webhook:
+#zeroconf:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+#template: !include templates.yaml
+sensor: !include sensors.yaml
+
+weather:
+#camera:
+#  - platform: xiaomi_cloud_map_extractor
+#    host: !secret xiaomi_vacuum_host
+#    token: !secret xiaomi_vacuum_token
+#    username: !secret xiaomi_cloud_username
+#    password: !secret xiaomi_cloud_password
+#    draw: ['all']
+#    scan_interval:
+#      seconds: 600 #10minutes
+#    attributes:
+#      - calibration_points
+#    auto_update: false
+
+#zone:
+#  - name: Home2
+#    latitude: !secret latitude_home
+#    longitude: !secret longitude_home
+#    radius: 200
+#    icon: mdi:home
+
+#lovelace:

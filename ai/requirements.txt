@@ -1,0 +1,6 @@
+google-genai
+openwakeword
+sounddevice
+numpy
+scipy
+requests
