@@ -23,7 +23,7 @@ RUN wget -O voices-v1.0.bin \
 
 
 WORKDIR /app
-COPY server.py .
+COPY voice/server.py .
 
 EXPOSE 8080
 
