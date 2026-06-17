@@ -126,12 +126,12 @@ services:
       options:
         max-size: "10m"
         max-file: 3
-  piper:
-    image: piper:latest
+  voice:
+    image: voice:latest
     build:
       context: .
-      dockerfile: ./piper/Dockerfile
-    container_name: piper
+      dockerfile: ./voice/Dockerfile
+    container_name: voice
     restart: unless-stopped
     logging:
       driver: "json-file"
