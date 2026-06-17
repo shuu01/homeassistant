@@ -22,11 +22,11 @@ SILENCE_TIMEOUT_SECONDS = 2
 
 WHISPER_SERVER = os.getenv(
     "WHISPER_SERVER",
-    "http://whisper:80",
+    "http://whisper:8080",
 )
 PIPER_SERVER = os.getenv(
     "PIPER_SERVER",
-    "http://piper:80",
+    "http://piper:8080",
 )
 #PIPER_MODEL = "/home/ha/piper/en_US-lessac-medium.onnx"
 

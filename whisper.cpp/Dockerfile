@@ -36,9 +36,5 @@ RUN wget -O /models/ggml-tiny.en-q5_1.bin \
 
 EXPOSE 8080
 
-CMD [
-  "/usr/local/bin/whisper-server",
-  "-m", "/models/ggml-tiny.en-q5_1.bin",
-  "--host", "0.0.0.0",
-  "--port", "8080"
-]
+CMD ["/usr/local/bin/whisper-server", "-m", "/models/ggml-tiny.en-q5_1.bin", \
+  "--host", "0.0.0.0", "--port", "8080"]
