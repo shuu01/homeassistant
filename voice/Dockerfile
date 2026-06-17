@@ -15,12 +15,10 @@ RUN pip install --no-cache-dir \
     soundfile
 
 WORKDIR /models
-RUN wget -O kokoro-v1.0.onnx \
-    https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v1.0.onnx
-
-RUN wget -O voices-v1.0.bin \
-    https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices-v1.0.bin
-
+RUN wget -O kokoro.onnx \
+  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx
+RUN wget -O voices.bin \
+  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
 
 WORKDIR /app
 COPY voice/server.py .
