@@ -30,15 +30,14 @@ RUN apt-get update && \
 
 COPY --from=builder /src/build/bin/whisper-server /usr/local/bin/whisper-server
 
-RUN mkdir -p /models && \
-    wget -O /models/ggml-tiny.en-q5_1.bin \
+WORKDIR /models
+RUN wget -O /models/ggml-tiny.en-q5_1.bin \
     https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin
 
 EXPOSE 8080
 
-ENTRYPOINT ["/usr/local/bin/whisper-server"]
-
 CMD [
+  "/usr/local/bin/whisper-server",
   "-m", "/models/ggml-tiny.en-q5_1.bin",
   "--host", "0.0.0.0",
   "--port", "8080"

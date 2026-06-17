@@ -99,3 +99,42 @@ services:
       options:
         max-size: "10m"
         max-file: 3
+  ai:
+    image: ai:latest
+    build:
+      context: .
+      dockerfile: ./ai/Dockerfile
+    environment: {}
+      # WHISPER_SERVER: ${WHISPER_SERVER}
+      # PIPER_SERVER: ${PIPER_SERVER}
+    container_name: ai
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: 3
+  whisper:
+    image: whisper:latest
+    build:
+      context: .
+      dockerfile: ./whisper.cpp/Dockerfile
+    container_name: whisper
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: 3
+  piper:
+    image: piper:latest
+    build:
+      context: .
+      dockerfile: ./piper/Dockerfile
+    container_name: piper
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: 3

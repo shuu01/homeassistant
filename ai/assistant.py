@@ -22,7 +22,11 @@ SILENCE_TIMEOUT_SECONDS = 2
 
 WHISPER_SERVER = os.getenv(
     "WHISPER_SERVER",
-    "http://whisper:8080",
+    "http://whisper:80",
+)
+PIPER_SERVER = os.getenv(
+    "PIPER_SERVER",
+    "http://piper:80",
 )
 #PIPER_MODEL = "/home/ha/piper/en_US-lessac-medium.onnx"
 
@@ -44,7 +48,9 @@ client = genai.Client(
 # ---------- WAKEWORD ----------
 
 print("Loading wake word model...")
-wake_model = Model()
+wake_model = Model(
+    inference_framework="onnx"
+)
 
 # ---------- AUDIO ----------
 
@@ -162,8 +168,22 @@ def ask_gemini(text):
 
     return response.text.strip()
 
+def wait_for_whisper():
+    while True:
+        try:
+            requests.get(
+                f"{WHISPER_SERVER}/health",
+                timeout=2,
+            )
+            print("whisper-server ready")
+            return
+        except Exception:
+            print("waiting for whisper-server...")
+            time.sleep(5)
+
 # ---------- MAIN ----------
 
+wait_for_whisper()
 print("Listening for wake word...")
 
 with sd.InputStream(
