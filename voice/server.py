@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from kokoro_onnx import Kokoro
 
 
-MODEL = "/models/kokoro-v1.0.onnx"
-VOICES = "/models/voices-v1.0.bin"
+MODEL = "/models/kokoro.onnx"
+VOICES = "/models/voices.bin"
 
 voice = None
 tts_lock = Lock()
