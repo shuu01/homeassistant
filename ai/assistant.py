@@ -7,6 +7,7 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 from scipy.io.wavfile import write
+from scipy.signal import resample_poly
 
 import requests
 from google import genai
@@ -14,7 +15,8 @@ from openwakeword.model import Model
 
 # ---------- CONFIG ----------
 
-RATE = 16000
+MIC_RATE = 48000
+RATE=16000
 WAKE_THRESHOLD = 0.3
 CONVERSATION_IDLE_TIMEOUT = 20
 MAX_RECORD_SECONDS = 30
@@ -60,8 +62,17 @@ def flush_queue():
 def callback(indata, frames, time_info, status):
     if is_speaking:
         return
+
     try:
+        # audio_16k = resample_poly(
+        #     indata.flatten(),
+        #     up=1,
+        #     down=3,
+        # ).astype(np.int16)
+
+        # audio_queue.put_nowait(audio_16k)
         audio_queue.put_nowait(indata.flatten())
+
     except queue.Full:
         pass
 
@@ -181,17 +192,22 @@ wait_for_service("voice", VOICE_SERVER)
 print("Listening for wake word...")
 
 with sd.InputStream(
+    #device=4,
+    #samplerate=MIC_RATE,
     samplerate=RATE,
     channels=1,
     dtype="int16",
+    #blocksize=3840,
     blocksize=1280,
     callback=callback,
 ):
+    print("Actual sample rate:", stream.samplerate)
 
     while True:
 
         audio = audio_queue.get()
         prediction = wake_model.predict(audio)
+        print(prediction)
         score = max(prediction.values(), default=0)
 
         if score > 0.1:
