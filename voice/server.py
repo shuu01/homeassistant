@@ -2,10 +2,18 @@ from io import BytesIO
 
 import soundfile as sf
 import uvicorn
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
+
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["ORT_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["ORT_DISABLE_ALL_LOGS"] = "1"
+os.environ["KMP_AFFINITY"] = "granularity=fine,compact,1,0"
+os.environ["KMP_BLOCKTIME"] = "1"
 
 from kokoro_onnx import Kokoro
 
@@ -29,6 +37,9 @@ def startup():
     print(f"Loading voice: {MODEL}")
     voice = Kokoro(MODEL, VOICES)
     print("Voice loaded")
+    print("Warming up TTS...")
+    voice.create("hello", voice="af_heart", speed=1.0)
+    print("Warmup done")
 
 
 @app.get("/health")
