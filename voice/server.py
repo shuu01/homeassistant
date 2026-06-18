@@ -1,5 +1,4 @@
 from io import BytesIO
-from threading import Lock
 
 import soundfile as sf
 import uvicorn
@@ -15,7 +14,6 @@ MODEL = "/models/kokoro.onnx"
 VOICES = "/models/voices.bin"
 
 voice = None
-tts_lock = Lock()
 app = FastAPI()
 
 
@@ -45,13 +43,13 @@ def synthesize(req: SynthesizeRequest):
     if not text:
         raise HTTPException(400, "empty text")
 
-    with tts_lock:
-        samples, sample_rate = voice.create(
-            text,
-            voice=req.voice,
-            speed=req.speed,
-        )
-
+    print("TTS START")
+    samples, sample_rate = voice.create(
+        text,
+        voice=req.voice,
+        speed=req.speed,
+    )
+    print("TTS DONE")
     wav = BytesIO()
 
     sf.write(
