@@ -108,6 +108,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
     container_name: ai
     restart: unless-stopped
+    devices:
+      - /dev/snd:/dev/snd
     logging:
       driver: "json-file"
       options:
