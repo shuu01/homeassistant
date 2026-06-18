@@ -197,7 +197,6 @@ with sd.InputStream(
     samplerate=RATE,
     channels=1,
     dtype="int16",
-    #blocksize=3840,
     blocksize=1280,
     callback=callback,
 ) as stream:
@@ -208,7 +207,10 @@ with sd.InputStream(
 
         audio = audio_queue.get()
         prediction = wake_model.predict(audio)
-        print(prediction)
+        print(
+            f"mean={np.abs(audio).mean():.0f} "
+            f"max={np.abs(audio).max()}"
+        )
         score = max(prediction.values(), default=0)
 
         if score > 0.1:
