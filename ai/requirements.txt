@@ -1,6 +1,7 @@
 google-genai
 openwakeword
 sounddevice
+soundfile
 numpy
 scipy
 requests
