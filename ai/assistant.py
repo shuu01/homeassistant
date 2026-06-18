@@ -154,12 +154,6 @@ def transcribe(wav_buffer):
         data = response.json()
         return data.get("text", "").strip()
 
-    finally:
-        try:
-            os.unlink(path)
-        except FileNotFoundError:
-            pass
-
 
 def ask_gemini(text):
     response = client.models.generate_content(
