@@ -16,6 +16,7 @@ from openwakeword.model import Model
 # ---------- CONFIG ----------
 
 MIC_RATE = 48000
+OUTPUT_RATE = 48000
 RATE = 16000
 AUDIO_DEVICE = 4
 WAKE_THRESHOLD = 0.3
@@ -96,19 +97,12 @@ def speak(text):
         dtype="float32",
     )
 
-    print("content-type:", r.headers.get("content-type"))
-    print("bytes:", len(r.content))
-    with open("/tmp/reply.wav", "wb") as f:
-        f.write(r.content)
-
-    print("shape:", audio.shape)
-    print("sample_rate:", sample_rate)
-    print("max:", np.max(audio))
-    print("min:", np.min(audio))
+    if sample_rate != OUTPUT_RATE:
+        audio = resample_poly(audio, OUTPUT_RATE, sample_rate)
 
     is_speaking = True
     try:
-        sd.play(audio, sample_rate, AUDIO_DEVICE)
+        sd.play(audio.astype("float32"), OUTPUT_RATE, AUDIO_DEVICE)
         sd.wait()
     finally:
         is_speaking = False
