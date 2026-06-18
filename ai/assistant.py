@@ -245,7 +245,7 @@ with sd.InputStream(
                 answer = ask_gemini(text)
             except Exception as e:
                 print("Answer failed {e}")
-                continue
+                raise
 
             speak(answer)
 
