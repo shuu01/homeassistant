@@ -121,6 +121,8 @@ services:
       dockerfile: ./whisper.cpp/Dockerfile
     container_name: whisper
     restart: unless-stopped
+    devices:
+      - /dev/snd:/dev/snd
     logging:
       driver: "json-file"
       options:
@@ -133,6 +135,8 @@ services:
       dockerfile: ./voice/Dockerfile
     container_name: voice
     restart: unless-stopped
+    devices:
+      - /dev/snd:/dev/snd
     logging:
       driver: "json-file"
       options:

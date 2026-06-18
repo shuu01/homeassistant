@@ -1,3 +1,4 @@
+import io
 import os
 import queue
 import tempfile
@@ -6,6 +7,7 @@ import time
 
 import numpy as np
 import sounddevice as sd
+import soundfile as sf
 from scipy.io.wavfile import write
 
 import requests
@@ -24,14 +26,13 @@ WHISPER_SERVER = os.getenv(
     "WHISPER_SERVER",
     "http://whisper:8080",
 )
-PIPER_SERVER = os.getenv(
-    "PIPER_SERVER",
-    "http://piper:8080",
+VOICE_SERVER = os.getenv(
+    "VOICE_SERVER",
+    "http://voice:8080",
 )
-#PIPER_MODEL = "/home/ha/piper/en_US-lessac-medium.onnx"
 
 SYSTEM_PROMPT = """
-You are Daisy, a friendly companion for a child.
+You are Alexa, a friendly companion for a 4 years old child.
 
 Keep responses short.
 Be cheerful and encouraging.
@@ -39,71 +40,63 @@ Tell stories when asked.
 Never be scary.
 """
 
-# ---------- GEMINI ----------
-
 client = genai.Client(
     api_key=os.getenv("GEMINI_API_KEY")
 )
-
-# ---------- WAKEWORD ----------
 
 print("Loading wake word model...")
 wake_model = Model(
     inference_framework="onnx"
 )
 
-# ---------- AUDIO ----------
+audio_queue = queue.Queue(maxsize=100)
+is_speaking = False
 
-audio_queue = queue.Queue()
+
+def flush_queue():
+    while True:
+        try:
+            audio_queue.get_nowait()
+        except queue.Empty:
+            break
+
 
 def callback(indata, frames, time_info, status):
-    audio_queue.put(indata.copy())
+    if is_speaking:
+        return
+    try:
+        audio_queue.put_nowait(indata.copy())
+    except queue.Full:
+        pass
 
-# ---------- SPEAK ----------
 
 def speak(text):
-
+    global is_speaking
     print(f"Daisy: {text}")
 
     r = requests.post(
-        "http://piper:8080/synthesize",
+        f"http://{VOICE_SERVER}/synthesize",
         json={
-            "text": answer,
+            "text": text,
         },
         timeout=30,
     )
 
     r.raise_for_status()
 
-    with open("/tmp/reply.wav", "wb") as f:
-        f.write(r.content)
+    audio, sample_rate = sf.read(
+        io.BytesIO(r.content),
+        dtype="float32",
+    )
 
-    # piper = subprocess.Popen(
-    #     [
-    #         "piper",
-    #         "--model",
-    #         PIPER_MODEL,
-    #         "--output-raw",
-    #     ],
-    #     stdin=subprocess.PIPE,
-    #     stdout=subprocess.PIPE,
-    # )
+    is_speaking = True
+    try:
+        sd.play(audio, sample_rate)
+        sd.wait()
+    finally:
+        is_speaking = False
+        flush_queue()
 
-    #audio_data, _ = piper.communicate(text.encode())
-
-    # aplay = subprocess.Popen(
-    #     [
-    #         "aplay",
-    #         "-r", "22050",
-    #         "-f", "S16_LE",
-    #         "-t", "raw",
-    #     ],
-    #     stdin=subprocess.PIPE,
-    # )
-
-    # aplay.communicate(audio_data)
-
-# ---------- RECORD QUESTION ----------
 
 def record_question():
     chunks = []
@@ -112,7 +105,7 @@ def record_question():
     last_voice = time.time()
 
     while True:
-        chunk = audio_queue.get()
+        chunk = audio_queue.get(timeout=5)
 
         chunks.append(chunk)
 
@@ -136,29 +129,32 @@ def record_question():
         write(f.name, RATE, audio)
         return f.name
 
-# ---------- TRANSCRIBE ----------
 
 def transcribe(path):
-    with open(path, "rb") as f:
-        files = {
-            "file": ("audio.wav", f, "audio/wav")
-        }
+    try:
+        with open(path, "rb") as f:
+            files = {
+                "file": ("audio.wav", f, "audio/wav")
+            }
 
-        response = requests.post(
-            f"{WHISPER_SERVER}/inference",
-            files=files,
-            timeout=60,
-        )
+            response = requests.post(
+                f"{WHISPER_SERVER}/inference",
+                files=files,
+                timeout=60,
+            )
 
-    response.raise_for_status()
+        response.raise_for_status()
 
-    os.unlink(path)
+        data = response.json()
 
-    data = response.json()
+        return data.get("text", "").strip()
 
-    return data.get("text", "").strip()
+    finally:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
 
-# ---------- ASK GEMINI ----------
 
 def ask_gemini(text):
     response = client.models.generate_content(
@@ -168,22 +164,25 @@ def ask_gemini(text):
 
     return response.text.strip()
 
-def wait_for_whisper():
+
+def wait_for_service(name, url):
     while True:
         try:
-            requests.get(
-                f"{WHISPER_SERVER}/health",
+            response = requests.get(
+                f"{url}/health",
                 timeout=2,
             )
-            print("whisper-server ready")
+            response.raise_for_status()
+            print(f"{name} ready")
             return
         except Exception:
-            print("waiting for whisper-server...")
+            print(f"waiting for {name}...")
             time.sleep(5)
 
 # ---------- MAIN ----------
 
-wait_for_whisper()
+wait_for_service("whisper", WHISPER_SERVER)
+wait_for_service("voice", VOICE_SERVER)
 print("Listening for wake word...")
 
 with sd.InputStream(
@@ -200,7 +199,7 @@ with sd.InputStream(
 
         prediction = wake_model.predict(audio)
 
-        score = max(prediction.values())
+        score = max(prediction.values(), default=0.0)
 
         if score < WAKE_THRESHOLD:
             continue
@@ -209,16 +208,19 @@ with sd.InputStream(
 
         speak("Hi! What would you like to talk about?")
 
-        conversation_deadline = time.time() + 20
         last_activity = time.time()
 
         while True:
             if time.time() - last_activity > 20:
-            break
+                break
 
             wav_path = record_question()
 
-            text = transcribe(wav_path)
+            try:
+                text = transcribe(wav_path)
+            except Exception as e:
+                print(f"Whisper failed: {e}")
+                continue
 
             if not text:
                 continue
@@ -227,7 +229,10 @@ with sd.InputStream(
 
             print(f"Child: {text}")
 
-            answer = ask_gemini(text)
+            try:
+                answer = ask_gemini(text)
+            except Exception as e:
+                print("Answer failed {e}")
 
             speak(answer)
 
