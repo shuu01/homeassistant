@@ -21,12 +21,6 @@ class SynthesizeRequest(BaseModel):
     speed: float = 1.0
 
 
-def audio_to_wav_bytes(audio: np.ndarray) -> bytes:
-    buf = BytesIO()
-    sf.write(buf, audio, 22050, format="WAV", subtype="PCM_16")
-    return buf.getvalue()
-
-
 @app.on_event("startup")
 def startup():
     global voice
@@ -47,12 +41,11 @@ def synthesize(req: SynthesizeRequest):
     if not text:
         raise HTTPException(400, "empty text")
 
-    chunks = []
-    for chunk in voice.synthesize(text):
-        chunks.append(chunk)
-
-    audio = np.concatenate(chunks)
+    audio = voice.synthesize(text)
 
     wav_bytes = audio_to_wav_bytes(audio, 22050)
 
-    return Response(content=wav_bytes, media_type="audio/wav")
+    buf = BytesIO()
+    sf.write(buf, audio, 22050, format="WAV", subtype="PCM_16")
+
+    return Response(content=buf.getvalue(), media_type="audio/wav")
