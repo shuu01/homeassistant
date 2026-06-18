@@ -1,8 +1,6 @@
 import io
 import os
 import queue
-import tempfile
-import subprocess
 import time
 
 import numpy as np
@@ -121,32 +119,31 @@ def record_question():
             break
 
     audio = np.concatenate(chunks, axis=0)
+    wav_buffer = io.BytesIO()
+    write(wav_buffer, RATE, audio)
+    wav_buffer.seek(0)
 
-    with tempfile.NamedTemporaryFile(
-        suffix=".wav",
-        delete=False,
-    ) as f:
-        write(f.name, RATE, audio)
-        return f.name
+    return wav_buffer
 
 
-def transcribe(path):
+def transcribe(wav_buffer):
     try:
-        with open(path, "rb") as f:
-            files = {
-                "file": ("audio.wav", f, "audio/wav")
-            }
-
-            response = requests.post(
-                f"{WHISPER_SERVER}/inference",
-                files=files,
-                timeout=60,
+        files = {
+            "file": (
+                "audio.wav",
+                wav_buffer,
+                "audio/wav",
             )
+        }
+
+        response = requests.post(
+            f"{WHISPER_SERVER}/inference",
+            files=files,
+            timeout=60,
+        )
 
         response.raise_for_status()
-
         data = response.json()
-
         return data.get("text", "").strip()
 
     finally:
@@ -196,16 +193,13 @@ with sd.InputStream(
     while True:
 
         audio = audio_queue.get()
-
         prediction = wake_model.predict(audio)
-
         score = max(prediction.values(), default=0.0)
 
         if score < WAKE_THRESHOLD:
             continue
 
         print("Wake word detected")
-
         speak("Hi! What would you like to talk about?")
 
         last_activity = time.time()
@@ -214,10 +208,10 @@ with sd.InputStream(
             if time.time() - last_activity > 20:
                 break
 
-            wav_path = record_question()
+            wav_buffer = record_question()
 
             try:
-                text = transcribe(wav_path)
+                text = transcribe(wav_buffer)
             except Exception as e:
                 print(f"Whisper failed: {e}")
                 continue

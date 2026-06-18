@@ -104,9 +104,8 @@ services:
     build:
       context: .
       dockerfile: ./ai/Dockerfile
-    environment: {}
-      # WHISPER_SERVER: ${WHISPER_SERVER}
-      # PIPER_SERVER: ${PIPER_SERVER}
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     container_name: ai
     restart: unless-stopped
     logging:
