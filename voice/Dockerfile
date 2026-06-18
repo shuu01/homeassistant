@@ -11,14 +11,15 @@ RUN apt-get update && \
 RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
-    kokoro-onnx \
+    piper-tts
     soundfile
 
 WORKDIR /models
-RUN wget -O kokoro.onnx \
-  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx
-RUN wget -O voices.bin \
-  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
+RUN wget -O en_US-amy.onnx \
+    https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx
+
+RUN wget -O en_US-amy.onnx.json \
+    https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json
 
 WORKDIR /app
 COPY voice/server.py .

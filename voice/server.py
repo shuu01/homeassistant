@@ -1,45 +1,38 @@
 from io import BytesIO
 
 import soundfile as sf
-import uvicorn
 import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
+from piper import PiperVoice
+import numpy as np
 
-os.environ["OMP_NUM_THREADS"] = "2"
-os.environ["ORT_NUM_THREADS"] = "2"
-os.environ["MKL_NUM_THREADS"] = "2"
-os.environ["ORT_DISABLE_ALL_LOGS"] = "1"
-os.environ["KMP_AFFINITY"] = "granularity=fine,compact,1,0"
-os.environ["KMP_BLOCKTIME"] = "1"
-
-from kokoro_onnx import Kokoro
-
-
-MODEL = "/models/kokoro.onnx"
-VOICES = "/models/voices.bin"
+MODEL = f"/models/{os.getenv('MODEL', 'en_US-lessac-medium.onnx')}"
+CONFIG = f"/models/{os.getenv('CONFIG', 'en_US-lessac-medium.onnx.json')}"
 
 voice = None
 app = FastAPI()
 
-
 class SynthesizeRequest(BaseModel):
     text: str
-    voice: str = "af_heart"
+    voice: str = "default"
     speed: float = 1.0
+
+
+def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
+    buf = BytesIO()
+    sf.write(buf, audio, sample_rate, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
 
 
 @app.on_event("startup")
 def startup():
     global voice
-    print(f"Loading voice: {MODEL}")
-    voice = Kokoro(MODEL, VOICES)
-    print("Voice loaded")
-    print("Warming up TTS...")
-    voice.create("hello", voice="af_heart", speed=1.0)
-    print("Warmup done")
+    print("Loading Piper model...")
+    voice = PiperVoice.load(MODEL, CONFIG)
+    print("Piper loaded")
 
 
 @app.get("/health")
@@ -54,23 +47,12 @@ def synthesize(req: SynthesizeRequest):
     if not text:
         raise HTTPException(400, "empty text")
 
-    print("TTS START")
-    samples, sample_rate = voice.create(
-        text,
-        voice=req.voice,
-        speed=req.speed,
-    )
-    print("TTS DONE")
-    wav = BytesIO()
+    chunks = []
+    for chunk in voice.synthesize(text, length_scale=1.0):
+        chunks.append(chunk.audio)
 
-    sf.write(
-        wav,
-        samples,
-        sample_rate,
-        format="WAV",
-    )
+    audio = np.concatenate(chunks)
 
-    return Response(
-        content=wav.getvalue(),
-        media_type="audio/wav",
-    )
+    wav_bytes = audio_to_wav_bytes(audio, 22050)
+
+    return Response(content=wav_bytes, media_type="audio/wav")
