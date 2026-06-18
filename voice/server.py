@@ -40,7 +40,7 @@ def synthesize(req: SynthesizeRequest):
     if not text:
         raise HTTPException(400, "empty text")
 
-    wav_buffer = io.BytesIO()
+    wav_buffer = BytesIO()
 
     # Write the synthesized audio directly to the buffer as a WAV file
     with wave.open(wav_buffer, "wb") as wav_file:
