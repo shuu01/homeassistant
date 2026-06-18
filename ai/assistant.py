@@ -15,7 +15,7 @@ from openwakeword.model import Model
 # ---------- CONFIG ----------
 
 RATE = 16000
-WAKE_THRESHOLD = 0.5
+WAKE_THRESHOLD = 0.3
 CONVERSATION_IDLE_TIMEOUT = 20
 MAX_RECORD_SECONDS = 30
 SILENCE_TIMEOUT_SECONDS = 2
@@ -192,7 +192,10 @@ with sd.InputStream(
 
         audio = audio_queue.get()
         prediction = wake_model.predict(audio)
-        score = max(prediction.values(), default=0.0)
+        score = max(prediction.values(), default=0)
+
+        if score > 0.1:
+            print(prediction)
 
         if score < WAKE_THRESHOLD:
             continue
