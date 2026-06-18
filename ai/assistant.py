@@ -165,22 +165,22 @@ def transcribe(wav_buffer):
 
 def ask_gemini(text, retries=3):
     text = f"{SYSTEM_PROMPT}\n\nChild: {text}"
+    models = [
+        "models/gemini-2.5-flash",
+        "models/gemini-2.0-flash",
+    ]
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=text
-        )
+    for m in models:
+        try:
+            return client.models.generate_content(
+                model=m,
+                contents=text
+            ).text.strip()
 
-    except Exception as e:
-        print("Primary model failed:", e)
+        except Exception as e:
+            print(f"Model failed {m}: {e}")
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=text
-        )
-
-    return response.text.strip()
+    return "Sorry, I'm not available right now."
 
 
 def wait_for_service(name, url):
