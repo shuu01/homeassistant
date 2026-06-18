@@ -17,6 +17,7 @@ from openwakeword.model import Model
 
 MIC_RATE = 48000
 RATE = 16000
+AUDIO_DEVICE = 4
 WAKE_THRESHOLD = 0.3
 CONVERSATION_IDLE_TIMEOUT = 20
 MAX_RECORD_SECONDS = 30
@@ -97,7 +98,7 @@ def speak(text):
 
     is_speaking = True
     try:
-        sd.play(audio, sample_rate)
+        sd.play(audio, sample_rate, AUDIO_DEVICE)
         sd.wait()
     finally:
         is_speaking = False
@@ -189,7 +190,7 @@ print(sd.query_devices(sd.default.device[0]))
 print("Listening for wake word...")
 
 with sd.InputStream(
-    device=4,
+    device=AUDIO_DEVICE,
     samplerate=MIC_RATE,
     channels=1,
     dtype="int16",
@@ -239,6 +240,7 @@ with sd.InputStream(
                 answer = ask_gemini(text)
             except Exception as e:
                 print("Answer failed {e}")
+                continue
 
             speak(answer)
 
