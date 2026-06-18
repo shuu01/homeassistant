@@ -11,7 +11,7 @@ RUN apt-get update && \
 RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
-    piper-tts
+    piper-tts \
     soundfile
 
 WORKDIR /models
