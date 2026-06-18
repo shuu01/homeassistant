@@ -61,7 +61,7 @@ def callback(indata, frames, time_info, status):
     if is_speaking:
         return
     try:
-        audio_queue.put_nowait(indata.copy())
+        audio_queue.put_nowait(indata.flatten())
     except queue.Full:
         pass
 
