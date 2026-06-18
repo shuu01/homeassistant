@@ -43,8 +43,6 @@ def synthesize(req: SynthesizeRequest):
 
     audio = voice.synthesize(text)
 
-    wav_bytes = audio_to_wav_bytes(audio, 22050)
-
     buf = BytesIO()
     sf.write(buf, audio, 22050, format="WAV", subtype="PCM_16")
 
