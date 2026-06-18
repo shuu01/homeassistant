@@ -78,7 +78,7 @@ def callback(indata, frames, time_info, status):
 
 def speak(text):
     global is_speaking
-    print(f"Daisy: {text}")
+    print(f"Assistant: {text}")
 
     r = requests.post(
         f"{VOICE_SERVER}/synthesize",
@@ -153,6 +153,8 @@ def transcribe(wav_buffer):
         response.raise_for_status()
         data = response.json()
         return data.get("text", "").strip()
+    except Exception as e:
+        print(e)
 
 
 def ask_gemini(text):
