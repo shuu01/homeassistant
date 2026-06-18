@@ -165,10 +165,6 @@ def transcribe(wav_buffer):
 
 def ask_gemini(text, retries=3):
     text = f"{SYSTEM_PROMPT}\n\nChild: {text}"
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=text
-    )
 
     try:
         response = client.models.generate_content(
