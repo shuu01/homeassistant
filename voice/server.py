@@ -43,6 +43,9 @@ def synthesize(req: SynthesizeRequest):
     buf = BytesIO()
 
     with wave.open(buf, "wb") as wav_file:
+        wav_file.setnchannels(1)        # mono
+        wav_file.setsampwidth(2)        # 16-bit PCM
+        wav_file.setframerate(22050)    # Piper default (adjust if needed)
         voice.synthesize(text, wav_file)
 
     return Response(content=buf.getvalue(), media_type="audio/wav")
