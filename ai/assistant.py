@@ -81,7 +81,7 @@ def speak(text):
     print(f"Daisy: {text}")
 
     r = requests.post(
-        f"http://{VOICE_SERVER}/synthesize",
+        f"{VOICE_SERVER}/synthesize",
         json={
             "text": text,
         },
@@ -207,10 +207,6 @@ with sd.InputStream(
 
         audio = audio_queue.get()
         prediction = wake_model.predict(audio)
-        print(
-            f"mean={np.abs(audio).mean():.0f} "
-            f"max={np.abs(audio).max()}"
-        )
         score = max(prediction.values(), default=0)
 
         if score > 0.1:
