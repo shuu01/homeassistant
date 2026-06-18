@@ -43,9 +43,7 @@ client = genai.Client(
 )
 
 print("Loading wake word model...")
-wake_model = Model(
-    inference_framework="onnx"
-)
+wake_model = Model()
 
 audio_queue = queue.Queue(maxsize=100)
 is_speaking = False
@@ -155,7 +153,7 @@ def transcribe(wav_buffer):
 
 def ask_gemini(text):
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-flash",
         contents=f"{SYSTEM_PROMPT}\n\nChild: {text}"
     )
 
