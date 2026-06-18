@@ -1,13 +1,12 @@
 from io import BytesIO
 
-import soundfile as sf
+import wave
 import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 from piper import PiperVoice
-import numpy as np
 
 MODEL = f"/models/{os.getenv('MODEL', 'en_US-lessac-medium.onnx')}"
 CONFIG = f"/models/{os.getenv('CONFIG', 'en_US-lessac-medium.onnx.json')}"
@@ -41,9 +40,9 @@ def synthesize(req: SynthesizeRequest):
     if not text:
         raise HTTPException(400, "empty text")
 
-    audio = voice.synthesize(text)
-
     buf = BytesIO()
-    sf.write(buf, audio, 22050, format="WAV", subtype="PCM_16")
+
+    with wave.open(buf, "wb") as wav_file:
+        voice.synthesize(text, wav_file)
 
     return Response(content=buf.getvalue(), media_type="audio/wav")
