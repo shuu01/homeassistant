@@ -40,12 +40,17 @@ def synthesize(req: SynthesizeRequest):
     if not text:
         raise HTTPException(400, "empty text")
 
-    buf = BytesIO()
+    wav_buffer = io.BytesIO()
 
-    with wave.open(buf, "wb") as wav_file:
-        wav_file.setnchannels(1)        # mono
-        wav_file.setsampwidth(2)        # 16-bit PCM
-        wav_file.setframerate(22050)    # Piper default (adjust if needed)
-        voice.synthesize(text, wav_file)
+    # Write the synthesized audio directly to the buffer as a WAV file
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)  # 16-bit PCM
+        wav_file.setframerate(22050)
+        voice.synthesize_wav(text, wav_file)
 
-    return Response(content=buf.getvalue(), media_type="audio/wav")
+    # Reset the buffer pointer to the beginning
+    wav_buffer.seek(0)
+
+    # Stream the WAV byte stream back to the client
+    return StreamingResponse(wav_buffer, media_type="audio/wav")
