@@ -98,6 +98,8 @@ def speak(text):
 
     print("content-type:", r.headers.get("content-type"))
     print("bytes:", len(r.content))
+    with open("/tmp/reply.wav", "wb") as f:
+        f.write(r.content)
 
     print("shape:", audio.shape)
     print("sample_rate:", sample_rate)
