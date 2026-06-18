@@ -16,7 +16,7 @@ from openwakeword.model import Model
 # ---------- CONFIG ----------
 
 MIC_RATE = 48000
-RATE=16000
+RATE = 16000
 WAKE_THRESHOLD = 0.3
 CONVERSATION_IDLE_TIMEOUT = 20
 MAX_RECORD_SECONDS = 30
@@ -64,14 +64,13 @@ def callback(indata, frames, time_info, status):
         return
 
     try:
-        # audio_16k = resample_poly(
-        #     indata.flatten(),
-        #     up=1,
-        #     down=3,
-        # ).astype(np.int16)
+        audio_16k = resample_poly(
+            indata.flatten(),
+            up=1,
+            down=3,
+        ).astype(np.int16)
 
-        # audio_queue.put_nowait(audio_16k)
-        audio_queue.put_nowait(indata.flatten())
+        audio_queue.put_nowait(audio_16k)
 
     except queue.Full:
         pass
@@ -189,15 +188,16 @@ def wait_for_service(name, url):
 
 wait_for_service("whisper", WHISPER_SERVER)
 wait_for_service("voice", VOICE_SERVER)
+print("Default device:", sd.default.device)
+print(sd.query_devices(sd.default.device[0]))
 print("Listening for wake word...")
 
 with sd.InputStream(
-    #device=4,
-    #samplerate=MIC_RATE,
-    samplerate=RATE,
+    device=4,
+    samplerate=MIC_RATE,
     channels=1,
     dtype="int16",
-    blocksize=1280,
+    blocksize=3840,
     callback=callback,
 ) as stream:
 
