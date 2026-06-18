@@ -98,11 +98,12 @@ def speak(text):
     )
 
     if sample_rate != OUTPUT_RATE:
+        print("Resample audio")
         audio = resample_poly(audio, OUTPUT_RATE, sample_rate)
 
     is_speaking = True
     try:
-        sd.play(audio.astype("float32"), OUTPUT_RATE, AUDIO_DEVICE)
+        sd.play(audio.astype("float32"), OUTPUT_RATE, device=AUDIO_DEVICE)
         sd.wait()
     finally:
         is_speaking = False
