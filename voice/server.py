@@ -49,7 +49,7 @@ def synthesize(req: SynthesizeRequest):
 
     chunks = []
     for chunk in voice.synthesize(text):
-        chunks.append(chunk.audio)
+        chunks.append(chunk)
 
     audio = np.concatenate(chunks)
 
