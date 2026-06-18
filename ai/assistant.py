@@ -96,6 +96,14 @@ def speak(text):
         dtype="float32",
     )
 
+    print("content-type:", r.headers.get("content-type"))
+    print("bytes:", len(r.content))
+
+    print("shape:", audio.shape)
+    print("sample_rate:", sample_rate)
+    print("max:", np.max(audio))
+    print("min:", np.min(audio))
+
     is_speaking = True
     try:
         sd.play(audio, sample_rate, AUDIO_DEVICE)
