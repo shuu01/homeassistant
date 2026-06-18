@@ -179,7 +179,7 @@ def ask_gemini(text, retries=3):
     except Exception as e:
         print("Primary model failed:", e)
 
-        responxe client.models.generate_content(
+        response = client.models.generate_content(
             model="gemini-1.5-flash",
             contents=text
         )
