@@ -163,11 +163,26 @@ def transcribe(wav_buffer):
         print(e)
 
 
-def ask_gemini(text):
+def ask_gemini(text, retries=3):
+    text = f"{SYSTEM_PROMPT}\n\nChild: {text}"
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=f"{SYSTEM_PROMPT}\n\nChild: {text}"
+        contents=text
     )
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=text
+        )
+
+    except Exception as e:
+        print("Primary model failed:", e)
+
+        responxe client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=text
+        )
 
     return response.text.strip()
 
