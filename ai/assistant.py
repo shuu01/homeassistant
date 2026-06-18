@@ -200,7 +200,8 @@ with sd.InputStream(
     #blocksize=3840,
     blocksize=1280,
     callback=callback,
-):
+) as stream:
+
     print("Actual sample rate:", stream.samplerate)
 
     while True:
