@@ -21,9 +21,9 @@ class SynthesizeRequest(BaseModel):
     speed: float = 1.0
 
 
-def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
+def audio_to_wav_bytes(audio: np.ndarray) -> bytes:
     buf = BytesIO()
-    sf.write(buf, audio, sample_rate, format="WAV", subtype="PCM_16")
+    sf.write(buf, audio, 22050, format="WAV", subtype="PCM_16")
     return buf.getvalue()
 
 
@@ -48,7 +48,7 @@ def synthesize(req: SynthesizeRequest):
         raise HTTPException(400, "empty text")
 
     chunks = []
-    for chunk in voice.synthesize(text, length_scale=1.0):
+    for chunk in voice.synthesize(text):
         chunks.append(chunk.audio)
 
     audio = np.concatenate(chunks)
