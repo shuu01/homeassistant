@@ -393,7 +393,7 @@ def main():
                         raise
 
                     speak(answer)
-                    ignore_wake_until = time.time() + 1
+                    ignore_wake_until = time.time() + 5
 
                 chunks = []
                 state = STATE_SLEEP
