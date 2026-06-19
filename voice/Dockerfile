@@ -26,4 +26,7 @@ COPY voice/server.py .
 
 EXPOSE 8080
 
+ENV MODEL="en_US-amy.onnx"
+ENV CONFIG="en_US-amy.onnx.json"
+
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,4 +1,6 @@
 google-genai
+groq
+openai
 openwakeword
 sounddevice
 soundfile

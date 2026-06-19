@@ -8,9 +8,12 @@ import sounddevice as sd
 import soundfile as sf
 from scipy.io.wavfile import write
 from scipy.signal import resample_poly
+from dataclasses import dataclass
 
 import requests
 from google import genai
+from groq import Groq
+from openai import OpenAI
 from openwakeword.model import Model
 
 # ---------- CONFIG ----------
@@ -18,8 +21,8 @@ from openwakeword.model import Model
 MIC_RATE = 48000
 OUTPUT_RATE = 48000
 RATE = 16000
-AUDIO_DEVICE = 4
-WAKE_THRESHOLD = 0.3
+AUDIO_DEVICE = int(os.getenv("AUDIO_DEVICE", "4"))
+WAKE_THRESHOLD = float(os.getenv("WAKE_THRESHOLD", "0.5"))
 CONVERSATION_IDLE_TIMEOUT = 20
 MAX_RECORD_SECONDS = 30
 SILENCE_TIMEOUT_SECONDS = 2
@@ -42,16 +45,20 @@ Tell stories when asked.
 Never be scary.
 """
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+STATE_SLEEP = "sleep"
+STATE_RECORD = "record"
+providers = []
+current_provider = 0
 
-print("Loading wake word model...")
-wake_model = Model()
+@dataclass
+class Provider:
+    name: str
+    client: object
+    fn: callable
+    model: str
 
 audio_queue = queue.Queue(maxsize=100)
 is_speaking = False
-
 
 def flush_queue():
     while True:
@@ -106,38 +113,8 @@ def speak(text):
         sd.play(audio.astype("float32"), OUTPUT_RATE, device=AUDIO_DEVICE)
         sd.wait()
     finally:
-        is_speaking = False
         flush_queue()
-
-
-def record_question():
-    chunks = []
-
-    start = time.time()
-    last_voice = time.time()
-
-    while True:
-        chunk = audio_queue.get(timeout=5)
-
-        chunks.append(chunk)
-
-        volume = np.abs(chunk).mean()
-
-        if volume > 200:
-            last_voice = time.time()
-
-        if time.time() - last_voice > SILENCE_TIMEOUT_SECONDS:
-            break
-
-        if time.time() - start > MAX_RECORD_SECONDS:
-            break
-
-    audio = np.concatenate(chunks, axis=0)
-    wav_buffer = io.BytesIO()
-    write(wav_buffer, RATE, audio)
-    wav_buffer.seek(0)
-
-    return wav_buffer
+        is_speaking = False
 
 
 def transcribe(wav_buffer):
@@ -163,22 +140,96 @@ def transcribe(wav_buffer):
         print(e)
 
 
-def ask_gemini(text, retries=3):
-    text = f"{SYSTEM_PROMPT}\n\nChild: {text}"
-    models = [
-        "models/gemini-2.5-flash",
-        "models/gemini-2.0-flash",
-    ]
+def ask_gemini(client, text, model):
 
-    for m in models:
+    try:
+        return client.models.generate_content(
+            model=model,
+            contents=text
+        ).text.strip()
+
+    except Exception as e:
+        print(f"Gemini failed ({model}): {e}")
+
+    raise RuntimeError("Gemini unavailable")
+
+
+def ask_groq(client, text, model):
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": text}
+            ]
+        )
+
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        print(f"Groq failed ({model}): {e}")
+
+    raise RuntimeError("Groq unavailable")
+
+
+def ask_openai(client, text, model):
+
+    try:
+        response = client.responses.create(
+            model=model,
+            instructions=SYSTEM_PROMPT,
+            input=text,
+        )
+
+        return response.output_text.strip()
+
+    except Exception as e:
+        print(f"OpenAI failed ({model}): {e}")
+
+    raise RuntimeError("OpenAI unavailable")
+
+
+def ask_openrouter(client, text, model):
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": text}
+            ]
+        )
+
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        print(f"OpenRouter failed ({model}): {e}")
+
+    raise RuntimeError("OpenRouter unavailable")
+
+
+def ask_llm(text):
+    global current_provider
+
+    if not providers:
+        return "No AI providers configured."
+
+    prompt = f"Child: {text}"
+
+    for offset in range(len(providers)):
+        idx = (current_provider + offset) % len(providers)
+
         try:
-            return client.models.generate_content(
-                model=m,
-                contents=text
-            ).text.strip()
+            provider = providers[idx]
+            if provider.name == "gemini":
+                prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
+            result = provider.fn(provider.client, prompt, provider.model)
+            current_provider = idx
+            return result
 
         except Exception as e:
-            print(f"Model failed {m}: {e}")
+            print(f"{provider.name} failed: {e}")
 
     return "Sorry, I'm not available right now."
 
@@ -197,69 +248,144 @@ def wait_for_service(name, url):
             print(f"waiting for {name}...")
             time.sleep(5)
 
-# ---------- MAIN ----------
+def main():
 
-wait_for_service("whisper", WHISPER_SERVER)
-wait_for_service("voice", VOICE_SERVER)
-print("Default device:", sd.default.device)
-print(sd.query_devices(sd.default.device[0]))
-print("Listening for wake word...")
+    wait_for_service("whisper", WHISPER_SERVER)
+    wait_for_service("voice", VOICE_SERVER)
 
-with sd.InputStream(
-    device=AUDIO_DEVICE,
-    samplerate=MIC_RATE,
-    channels=1,
-    dtype="int16",
-    blocksize=3840,
-    callback=callback,
-) as stream:
+    global providers
 
-    print("Actual sample rate:", stream.samplerate)
+    if key := os.getenv("GEMINI_API_KEY"):
+        providers.append(
+            Provider(
+                name = "gemini",
+                client = genai.Client(api_key=key),
+                fn = ask_gemini,
+                model = "models/gemini-2.5-flash",
+            )
+        )
 
-    while True:
+    if key := os.getenv("GROQ_API_KEY"):
+        providers.append(
+            Provider(
+                name = "groq",
+                client = Groq(api_key=key),
+                fn = ask_groq,
+                model = "llama-3.3-70b-versatile",
+            )
+        )
 
-        audio = audio_queue.get()
-        prediction = wake_model.predict(audio)
-        score = max(prediction.values(), default=0)
+    if key := os.getenv("OPENROUTER_API_KEY"):
+        providers.append(
+            Provider(
+                name = "openrouter",
+                client = OpenAI(
+                    api_key=key,
+                    base_url="https://openrouter.ai/api/v1"
+                ),
+                fn = ask_openrouter,
+                model = "qwen/qwen3-235b-a22b",
+            )
+        )
 
-        if score > 0.1:
-            print(prediction)
+    if key := os.getenv("OPENAI_API_KEY"):
+        providers.append(
+            Provider(
+                name = "openai",
+                client = OpenAI(api_key=key),
+                fn = ask_openai,
+                model = "gpt-5-nano",
+            )
+        )
 
-        if score < WAKE_THRESHOLD:
-            continue
+    global state
+    state = STATE_SLEEP
 
-        print("Wake word detected")
-        speak("Hi! What would you like to talk about?")
+    print("Loading wake word model...")
+    wake_model = Model()
 
-        last_activity = time.time()
+    print("Listening for wake word...")
+
+    with sd.InputStream(
+        device=AUDIO_DEVICE,
+        samplerate=MIC_RATE,
+        channels=1,
+        dtype="int16",
+        blocksize=3840,
+        callback=callback,
+    ) as stream:
+
+        print("Actual sample rate:", stream.samplerate)
+        chunks = []
+        heard_voice = False
+        last_voice = 0
 
         while True:
-            if time.time() - last_activity > 20:
-                break
-
-            wav_buffer = record_question()
 
             try:
-                text = transcribe(wav_buffer)
-            except Exception as e:
-                print(f"Whisper failed: {e}")
+                audio = audio_queue.get(timeout=0.5)
+            except queue.Empty:
                 continue
 
-            if not text:
+            if state == STATE_SLEEP:
+                prediction = wake_model.predict(audio)
+                score = max(prediction.values(), default=0)
+
+                if score > WAKE_THRESHOLD:
+                    print(prediction)
+
+                    print("Wake word detected")
+                    state = STATE_RECORD
+                    speak("Hi! What would you like to talk about?")
+
+                    chunks = []
+                    last_voice = time.time()
+                    record_start = time.time()
+
                 continue
 
-            last_activity = time.time()
+            chunks.append(audio)
+            volume = np.abs(audio).mean()
+            print(volume)
 
-            print(f"Child: {text}")
+            if volume > 200:
+                if not heard_voice: print("Speech detected")
 
-            try:
-                answer = ask_gemini(text)
-            except Exception as e:
-                print("Answer failed {e}")
-                raise
+                last_voice = time.time()
+                heard_voice = True
 
-            speak(answer)
+            if (
+                heard_voice and (time.time() - last_voice > SILENCE_TIMEOUT_SECONDS)
+                or time.time() - record_start > MAX_RECORD_SECONDS
+            ):
+                print("User stopped speaking")
 
-            last_activity = time.time()
+                wav_buffer = io.BytesIO()
+                write(wav_buffer, RATE, np.concatenate(chunks, axis=0))
+                wav_buffer.seek(0)
 
-        print("Returning to sleep...")
+                try:
+                    text = transcribe(wav_buffer)
+                except Exception as e:
+                    print(f"Whisper failed: {e}")
+                    continue
+
+                if text:
+                    print(f"Child: {text}")
+                    try:
+                        answer = ask_llm(text)
+                    except Exception as e:
+                        print(f"Answer failed {e}")
+                        raise
+
+                    speak(answer)
+
+                chunks = []
+                state = STATE_SLEEP
+                heard_voice = False
+                last_voice = 0
+                record_start = 0
+                print("Returning to sleep...")
+
+if __name__ == "__main__":
+    main()

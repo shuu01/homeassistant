@@ -136,9 +136,7 @@ services:
       dockerfile: ./voice/Dockerfile
     container_name: voice
     restart: unless-stopped
-    environment:
-      MODEL: "en_US-amy.onnx"
-      CONFIG: "en_US-amy.onnx.json"
+    environment: {}
     devices:
       - /dev/snd:/dev/snd
     logging:
