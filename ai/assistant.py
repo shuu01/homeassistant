@@ -1,6 +1,5 @@
 import io
 import os
-import queue
 import time
 
 import numpy as np
@@ -57,64 +56,38 @@ class Provider:
     fn: callable
     model: str
 
-audio_queue = queue.Queue(maxsize=100)
-is_speaking = False
-
-def flush_queue():
-    while True:
-        try:
-            audio_queue.get_nowait()
-        except queue.Empty:
-            break
-
-
-def callback(indata, frames, time_info, status):
-    if is_speaking:
-        return
-
-    try:
-        audio_16k = resample_poly(
-            indata.flatten(),
-            up=1,
-            down=3,
-        ).astype(np.int16)
-
-        audio_queue.put_nowait(audio_16k)
-
-    except queue.Full:
-        pass
-
 
 def speak(text):
-    global is_speaking
     print(f"Assistant: {text}")
 
-    r = requests.post(
+    response = requests.post(
         f"{VOICE_SERVER}/synthesize",
-        json={
-            "text": text,
-        },
+        json={"text": text},
         timeout=30,
     )
 
-    r.raise_for_status()
+    response.raise_for_status()
 
     audio, sample_rate = sf.read(
-        io.BytesIO(r.content),
+        io.BytesIO(response.content),
         dtype="float32",
     )
 
     if sample_rate != OUTPUT_RATE:
         print("Resample audio")
-        audio = resample_poly(audio, OUTPUT_RATE, sample_rate)
+        audio = resample_poly(
+            audio,
+            OUTPUT_RATE,
+            sample_rate,
+        )
 
-    is_speaking = True
-    try:
-        sd.play(audio.astype("float32"), OUTPUT_RATE, device=AUDIO_DEVICE)
-        sd.wait()
-    finally:
-        flush_queue()
-        is_speaking = False
+    sd.play(
+        audio.astype("float32"),
+        OUTPUT_RATE,
+        device=AUDIO_DEVICE,
+    )
+
+    sd.wait()
 
 
 def transcribe(wav_buffer):
@@ -303,108 +276,141 @@ def main():
     for provider in providers:
         print(f"  - {provider.name}")
 
+    # Sleep mode
+    # stream.read()
+    # wake_model.predict()
+
+    # Record mode
+    # stream.read()
+    # accumulate chunks
+
+    # Stop stream
+    # transcribe
+    # ask_llm
+    # speak
+
+    # Recreate wake model
+    # start stream again
+
     global state
     state = STATE_SLEEP
 
     print("Loading wake word model...")
     wake_model = Model()
 
-    print("Listening for wake word...")
-
-    with sd.InputStream(
+    stream = sd.InputStream(
         device=AUDIO_DEVICE,
         samplerate=MIC_RATE,
         channels=1,
         dtype="int16",
         blocksize=3840,
-        callback=callback,
-    ) as stream:
+    )
+    print("Actual sample rate:", stream.samplerate)
 
-        print("Actual sample rate:", stream.samplerate)
+    stream.start()
+    print("Listening for wake word...")
+
+    state = STATE_SLEEP
+    chunks = []
+    heard_voice = False
+    last_voice = 0
+    ignore_wake_until = 0
+    wake_hits = 0
+
+    while True:
+
+        audio, overflowed = stream.read(3840)
+
+        if overflowed:
+            print("Audio overflow")
+
+        audio = resample_poly(
+            audio.flatten(),
+            up=1,
+            down=3,
+        ).astype(np.int16)
+
+        if state == STATE_SLEEP:
+
+            prediction = wake_model.predict(audio)
+            score = max(prediction.values(), default=0)
+
+            if score > WAKE_THRESHOLD:
+                print(prediction)
+                wake_hits += 1
+            else:
+                wake_hits = 0
+
+            if wake_hits < 3:
+                continue
+
+            print("Wake word detected")
+            stream.stop()
+            speak("Hi! What would you like to talk about?")
+            stream.start()
+
+            chunks = []
+            last_voice = time.time()
+            record_start = time.time()
+            heard_voice = False
+            state = STATE_RECORD
+            continue
+
+        chunks.append(audio)
+        volume = np.abs(audio).mean()
+
+        if volume > 200:
+            if not heard_voice: print("Speech detected")
+
+            last_voice = time.time()
+            heard_voice = True
+
+        stop_recording = (
+            (heard_voice and time.time() - last_voice > SILENCE_TIMEOUT_SECONDS)
+            or
+            (time.time() - record_start > MAX_RECORD_SECONDS)
+        )
+
+        if not stop_recording:
+            continue
+
+        print("User stopped speaking")
+        stream.stop()
+
+        try:
+            wav_buffer = io.BytesIO()
+            write(wav_buffer, RATE, np.concatenate(chunks, axis=0))
+            wav_buffer.seek(0)
+
+            try:
+                text = transcribe(wav_buffer)
+            except Exception as e:
+                print(f"Whisper failed: {e}")
+                continue
+
+            if text:
+                print(f"Child: {text}")
+                try:
+                    answer = ask_llm(text)
+                except Exception as e:
+                    print(f"Answer failed {e}")
+                    raise
+
+                speak(answer)
+
+        except Exception as e:
+            print(e)
+
         chunks = []
         heard_voice = False
         last_voice = 0
-        ignore_wake_until = 0
+        record_start = 0
         wake_hits = 0
-
-        while True:
-
-            try:
-                audio = audio_queue.get(timeout=0.5)
-            except queue.Empty:
-                continue
-
-            if state == STATE_SLEEP:
-                if time.time() < ignore_wake_until:
-                    continue
-                prediction = wake_model.predict(audio)
-                score = max(prediction.values(), default=0)
-
-                if score > WAKE_THRESHOLD:
-                    print(prediction)
-                    wake_hits += 1
-                else:
-                    wake_hits = 0
-
-                if wake_hits >= 3:
-
-                    print("Wake word detected")
-                    speak("Hi! What would you like to talk about?")
-
-                    chunks = []
-                    last_voice = time.time()
-                    record_start = time.time()
-                    heard_voice = False
-                    state = STATE_RECORD
-
-                continue
-
-            chunks.append(audio)
-            volume = np.abs(audio).mean()
-
-            if volume > 200:
-                if not heard_voice: print("Speech detected")
-
-                last_voice = time.time()
-                heard_voice = True
-
-            if (
-                heard_voice and (time.time() - last_voice > SILENCE_TIMEOUT_SECONDS)
-                or time.time() - record_start > MAX_RECORD_SECONDS
-            ):
-                print("User stopped speaking")
-
-                wav_buffer = io.BytesIO()
-                write(wav_buffer, RATE, np.concatenate(chunks, axis=0))
-                wav_buffer.seek(0)
-
-                try:
-                    text = transcribe(wav_buffer)
-                except Exception as e:
-                    print(f"Whisper failed: {e}")
-                    continue
-
-                if text:
-                    print(f"Child: {text}")
-                    try:
-                        answer = ask_llm(text)
-                    except Exception as e:
-                        print(f"Answer failed {e}")
-                        raise
-
-                    speak(answer)
-                    ignore_wake_until = time.time() + 5
-
-                chunks = []
-                state = STATE_SLEEP
-                heard_voice = False
-                last_voice = 0
-                record_start = 0
-                wake_hits = 0
-                print("Returning to sleep...")
-                flush_queue()
-                #wake_model.reset()
-                wake_model = Model()
+        print("Returning to sleep...")
+        wake_model.reset()
+        #wake_model = Model()
+        stream.start()
+        state = STATE_SLEEP
 
 if __name__ == "__main__":
     main()
