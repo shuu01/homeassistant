@@ -339,7 +339,6 @@ def main():
                     continue
                 prediction = wake_model.predict(audio)
                 score = max(prediction.values(), default=0)
-                write("last_chunk.wav", RATE, audio)
 
                 if score > WAKE_THRESHOLD:
                     print(prediction)
@@ -348,7 +347,6 @@ def main():
                     wake_hits = 0
 
                 if wake_hits >= 3:
-                    write("trigger.wav", RATE, audio)
 
                     print("Wake word detected")
                     speak("Hi! What would you like to talk about?")
@@ -405,7 +403,8 @@ def main():
                 wake_hits = 0
                 print("Returning to sleep...")
                 flush_queue()
-                wake_model.reset()
+                #wake_model.reset()
+                wake_model = Model()
 
 if __name__ == "__main__":
     main()
