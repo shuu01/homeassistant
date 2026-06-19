@@ -298,6 +298,11 @@ def main():
             )
         )
 
+    print("Enabled providers:")
+
+    for provider in providers:
+        print(f"  - {provider.name}")
+
     global state
     state = STATE_SLEEP
 
@@ -320,6 +325,7 @@ def main():
         heard_voice = False
         last_voice = 0
         ignore_wake_until = 0
+        wake_hits = 0
 
         while True:
 
@@ -336,20 +342,25 @@ def main():
 
                 if score > WAKE_THRESHOLD:
                     print(prediction)
+                    wake_hits += 1
+                else:
+                    wake_hits = 0
+
+                if wake_hits >= 3:
 
                     print("Wake word detected")
-                    state = STATE_RECORD
                     speak("Hi! What would you like to talk about?")
 
                     chunks = []
                     last_voice = time.time()
                     record_start = time.time()
+                    heard_voice = False
+                    state = STATE_RECORD
 
                 continue
 
             chunks.append(audio)
             volume = np.abs(audio).mean()
-            print(volume)
 
             if volume > 200:
                 if not heard_voice: print("Speech detected")
@@ -389,6 +400,7 @@ def main():
                 heard_voice = False
                 last_voice = 0
                 record_start = 0
+                wake_hits = 0
                 print("Returning to sleep...")
                 flush_queue()
                 wake_model.reset()
