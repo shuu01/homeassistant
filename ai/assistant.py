@@ -14,6 +14,7 @@ from google import genai
 from groq import Groq
 from openai import OpenAI
 from openwakeword.model import Model
+from kokoro_onnx import Kokoro
 
 # ---------- CONFIG ----------
 
@@ -30,10 +31,10 @@ WHISPER_SERVER = os.getenv(
     "WHISPER_SERVER",
     "http://whisper:8080",
 )
-VOICE_SERVER = os.getenv(
-    "VOICE_SERVER",
-    "http://voice:8080",
-)
+# VOICE_SERVER = os.getenv(
+#     "VOICE_SERVER",
+#     "http://voice:8080",
+# )
 
 SYSTEM_PROMPT = """
 You are Alexa, a friendly companion for a 4 years old child.
@@ -49,6 +50,11 @@ STATE_RECORD = "record"
 providers = []
 current_provider = 0
 
+tts = Kokoro(
+    "kokoro-v1.0.onnx",
+    "voices-v1.0.bin",
+)
+
 @dataclass
 class Provider:
     name: str
@@ -57,36 +63,49 @@ class Provider:
     model: str
 
 
+# def speak(text):
+#     print(f"Assistant: {text}")
+
+#     response = requests.post(
+#         f"{VOICE_SERVER}/synthesize",
+#         json={"text": text},
+#         timeout=30,
+#     )
+
+#     response.raise_for_status()
+
+#     audio, sample_rate = sf.read(
+#         io.BytesIO(response.content),
+#         dtype="float32",
+#     )
+
+#     if sample_rate != OUTPUT_RATE:
+#         print("Resample audio")
+#         audio = resample_poly(
+#             audio,
+#             OUTPUT_RATE,
+#             sample_rate,
+#         )
+
+#     sd.play(
+#         audio.astype("float32"),
+#         OUTPUT_RATE,
+#         device=AUDIO_DEVICE,
+#     )
+
+#     sd.wait()
+
+
 def speak(text):
-    print(f"Assistant: {text}")
 
-    response = requests.post(
-        f"{VOICE_SERVER}/synthesize",
-        json={"text": text},
-        timeout=30,
+    samples, sr = tts.create(
+        text=text,
+        voice="af_heart",
+        speed=1.0,
+        lang="en-us",
     )
 
-    response.raise_for_status()
-
-    audio, sample_rate = sf.read(
-        io.BytesIO(response.content),
-        dtype="float32",
-    )
-
-    if sample_rate != OUTPUT_RATE:
-        print("Resample audio")
-        audio = resample_poly(
-            audio,
-            OUTPUT_RATE,
-            sample_rate,
-        )
-
-    sd.play(
-        audio.astype("float32"),
-        OUTPUT_RATE,
-        device=AUDIO_DEVICE,
-    )
-
+    sd.play(samples, sr)
     sd.wait()
 
 
@@ -224,7 +243,7 @@ def wait_for_service(name, url):
 def main():
 
     wait_for_service("whisper", WHISPER_SERVER)
-    wait_for_service("voice", VOICE_SERVER)
+    # wait_for_service("voice", VOICE_SERVER)
 
     global providers
 
@@ -257,7 +276,7 @@ def main():
                     base_url="https://openrouter.ai/api/v1"
                 ),
                 fn = ask_openrouter,
-                model = "qwen/qwen3-235b-a22b",
+                model = "openrouter/free",
             )
         )
 
