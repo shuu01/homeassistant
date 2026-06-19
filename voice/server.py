@@ -1,32 +1,34 @@
 from io import BytesIO
 
-import wave
-import os
+import soundfile as sf
+import uvicorn
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from piper import PiperVoice
 
-MODEL = f"/models/{os.getenv('MODEL', 'en_US-lessac-medium.onnx')}"
-CONFIG = f"/models/{os.getenv('CONFIG', 'en_US-lessac-medium.onnx.json')}"
+from kokoro_onnx import Kokoro
+
+
+MODEL = "/models/kokoro-v1.0.onnx"
+VOICES = "/models/voices-v1.0.bin"
 
 voice = None
 app = FastAPI()
 
+
 class SynthesizeRequest(BaseModel):
     text: str
-    voice: str = "default"
+    voice: str = "af_heart"
     speed: float = 1.0
 
 
 @app.on_event("startup")
 def startup():
     global voice
-    print("Loading Piper model...")
-    voice = PiperVoice.load(MODEL, CONFIG)
-    print("Piper loaded")
+    print(f"Loading voice: {MODEL}")
+    voice = Kokoro(MODEL, VOICES)
+    print("Voice loaded")
 
 
 @app.get("/health")
@@ -41,17 +43,22 @@ def synthesize(req: SynthesizeRequest):
     if not text:
         raise HTTPException(400, "empty text")
 
-    wav_buffer = BytesIO()
+    samples, sample_rate = voice.create(
+        text,
+        voice=req.voice,
+        speed=req.speed,
+    )
 
-    # Write the synthesized audio directly to the buffer as a WAV file
-    with wave.open(wav_buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)  # 16-bit PCM
-        wav_file.setframerate(22050)
-        voice.synthesize_wav(text, wav_file)
+    wav = BytesIO()
 
-    # Reset the buffer pointer to the beginning
-    wav_buffer.seek(0)
+    sf.write(
+        wav,
+        samples,
+        sample_rate,
+        format="WAV",
+    )
 
-    # Stream the WAV byte stream back to the client
-    return StreamingResponse(wav_buffer, media_type="audio/wav")
+    return Response(
+        content=wav.getvalue(),
+        media_type="audio/wav",
+    )
