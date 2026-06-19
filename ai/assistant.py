@@ -390,6 +390,8 @@ def main():
                 last_voice = 0
                 record_start = 0
                 print("Returning to sleep...")
+                flush_queue()
+                wake_model.reset()
 
 if __name__ == "__main__":
     main()
