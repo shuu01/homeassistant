@@ -319,6 +319,7 @@ def main():
         chunks = []
         heard_voice = False
         last_voice = 0
+        ignore_wake_until = 0
 
         while True:
 
@@ -328,6 +329,8 @@ def main():
                 continue
 
             if state == STATE_SLEEP:
+                if time.time() < ignore_wake_until:
+                    continue
                 prediction = wake_model.predict(audio)
                 score = max(prediction.values(), default=0)
 
@@ -379,6 +382,7 @@ def main():
                         raise
 
                     speak(answer)
+                    ignore_wake_until = time.time() + 1
 
                 chunks = []
                 state = STATE_SLEEP
