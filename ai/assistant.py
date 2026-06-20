@@ -16,6 +16,12 @@ from openai import OpenAI
 from openwakeword.model import Model
 from kokoro_onnx import Kokoro
 
+import onnxruntime as ort
+
+sess_options = ort.SessionOptions()
+sess_options.intra_op_num_threads = 4
+sess_options.inter_op_num_threads = 1
+
 # ---------- CONFIG ----------
 
 MIC_RATE = 48000
@@ -36,14 +42,15 @@ WHISPER_SERVER = os.getenv(
 #     "http://voice:8080",
 # )
 
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
 You are Alexa, a friendly companion for a 4 years old child.
 
 Keep responses short.
 Be cheerful and encouraging.
 Tell stories when asked.
 Never be scary.
-"""
+No emojis in responses.
+""")
 
 STATE_SLEEP = "sleep"
 STATE_RECORD = "record"
@@ -98,14 +105,14 @@ class Provider:
 
 def speak(text):
     print(f"Assistant: {text}")
-
+    start = time.time()
     samples, sr = tts.create(
         text=text,
         voice="af_heart",
         speed=1.0,
         lang="en-us",
     )
-
+    print(f"TTS time: {time.time() - start}")
     if sr != OUTPUT_RATE:
         samples = resample_poly(samples, OUTPUT_RATE, sr)
         sr = OUTPUT_RATE
@@ -431,8 +438,8 @@ def main():
         record_start = 0
         wake_hits = 0
         print("Returning to sleep...")
-        wake_model.reset()
-        #wake_model = Model()
+        #wake_model.reset()
+        wake_model = Model()
         stream.start()
         state = STATE_SLEEP
 
