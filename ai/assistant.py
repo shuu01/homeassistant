@@ -106,6 +106,10 @@ def speak(text):
         lang="en-us",
     )
 
+    if sr != OUTPUT_RATE:
+        samples = resample_poly(samples, OUTPUT_RATE, sr)
+        sr = OUTPUT_RATE
+
     sd.play(samples, sr, device=AUDIO_DEVICE)
     sd.wait()
 
@@ -415,7 +419,7 @@ def main():
                 except Exception as e:
                     print(f"Answer failed {e}")
                     raise
-                print(answer)
+
                 speak(answer)
 
         except Exception as e:
