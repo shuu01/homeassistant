@@ -97,6 +97,7 @@ class Provider:
 
 
 def speak(text):
+    print(f"Assistant: {text}")
 
     samples, sr = tts.create(
         text=text,
@@ -105,7 +106,7 @@ def speak(text):
         lang="en-us",
     )
 
-    sd.play(samples, sr)
+    sd.play(samples, sr, device=AUDIO_DEVICE)
     sd.wait()
 
 
@@ -340,8 +341,8 @@ def main():
 
         audio, overflowed = stream.read(3840)
 
-        if overflowed:
-            print("Audio overflow")
+        # if overflowed:
+        #     print("Audio overflow")
 
         audio = resample_poly(
             audio.flatten(),
@@ -414,7 +415,7 @@ def main():
                 except Exception as e:
                     print(f"Answer failed {e}")
                     raise
-
+                print(answer)
                 speak(answer)
 
         except Exception as e:
