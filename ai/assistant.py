@@ -301,7 +301,6 @@ def main():
     print("Loading wake word model...")
     wake_model = Model(
         wakeword_models=['alexa'],
-        enable_speex_noise_suppression=True,
         vad_threshold=0.5
     )
 
