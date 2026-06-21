@@ -14,15 +14,6 @@ from google import genai
 from groq import Groq
 from openai import OpenAI
 from openwakeword.model import Model
-from kokoro_onnx import Kokoro
-
-import onnxruntime as ort
-
-sess_options = ort.SessionOptions()
-sess_options.intra_op_num_threads = 4
-sess_options.inter_op_num_threads = 1
-
-# ---------- CONFIG ----------
 
 MIC_RATE = 48000
 OUTPUT_RATE = 48000
@@ -37,10 +28,10 @@ WHISPER_SERVER = os.getenv(
     "WHISPER_SERVER",
     "http://whisper:8080",
 )
-# VOICE_SERVER = os.getenv(
-#     "VOICE_SERVER",
-#     "http://voice:8080",
-# )
+VOICE_SERVER = os.getenv(
+    "VOICE_SERVER",
+    "http://voice:8080",
+)
 
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
 You are Alexa, a friendly companion for a 4 years old child.
@@ -57,10 +48,6 @@ STATE_RECORD = "record"
 providers = []
 current_provider = 0
 
-tts = Kokoro(
-    "kokoro-v1.0.onnx",
-    "voices-v1.0.bin",
-)
 
 @dataclass
 class Provider:
@@ -70,54 +57,39 @@ class Provider:
     model: str
 
 
-# def speak(text):
-#     print(f"Assistant: {text}")
-
-#     response = requests.post(
-#         f"{VOICE_SERVER}/synthesize",
-#         json={"text": text},
-#         timeout=30,
-#     )
-
-#     response.raise_for_status()
-
-#     audio, sample_rate = sf.read(
-#         io.BytesIO(response.content),
-#         dtype="float32",
-#     )
-
-#     if sample_rate != OUTPUT_RATE:
-#         print("Resample audio")
-#         audio = resample_poly(
-#             audio,
-#             OUTPUT_RATE,
-#             sample_rate,
-#         )
-
-#     sd.play(
-#         audio.astype("float32"),
-#         OUTPUT_RATE,
-#         device=AUDIO_DEVICE,
-#     )
-
-#     sd.wait()
-
-
 def speak(text):
     print(f"Assistant: {text}")
-    start = time.time()
-    samples, sr = tts.create(
-        text=text,
-        voice="af_heart",
-        speed=1.0,
-        lang="en-us",
-    )
-    print(f"TTS time: {time.time() - start}")
-    if sr != OUTPUT_RATE:
-        samples = resample_poly(samples, OUTPUT_RATE, sr)
-        sr = OUTPUT_RATE
 
-    sd.play(samples, sr, device=AUDIO_DEVICE)
+    response = requests.post(
+        f"{VOICE_SERVER}/synthesize",
+        json={
+            "text": text,
+            "voice": "af_heart",
+        },
+        timeout=30,
+    )
+
+    response.raise_for_status()
+
+    audio, sample_rate = sf.read(
+        io.BytesIO(response.content),
+        dtype="float32",
+    )
+
+    if sample_rate != OUTPUT_RATE:
+        print("Resample audio")
+        audio = resample_poly(
+            audio,
+            OUTPUT_RATE,
+            sample_rate,
+        )
+
+    sd.play(
+        audio.astype("float32"),
+        OUTPUT_RATE,
+        device=AUDIO_DEVICE,
+    )
+
     sd.wait()
 
 
@@ -255,7 +227,7 @@ def wait_for_service(name, url):
 def main():
 
     wait_for_service("whisper", WHISPER_SERVER)
-    # wait_for_service("voice", VOICE_SERVER)
+    wait_for_service("voice", VOICE_SERVER)
 
     global providers
 
@@ -327,7 +299,11 @@ def main():
     state = STATE_SLEEP
 
     print("Loading wake word model...")
-    wake_model = Model()
+    wake_model = Model(
+        wakeword_models=['alexa'],
+        enable_speex_noise_suppression=True,
+        vad_threshold=0.5
+    )
 
     stream = sd.InputStream(
         device=AUDIO_DEVICE,
@@ -364,7 +340,7 @@ def main():
         if state == STATE_SLEEP:
 
             prediction = wake_model.predict(audio)
-            score = max(prediction.values(), default=0)
+            score = prediction.get('alexa', 0.0)
 
             if score > WAKE_THRESHOLD:
                 print(prediction)
@@ -439,7 +415,7 @@ def main():
         wake_hits = 0
         print("Returning to sleep...")
         #wake_model.reset()
-        wake_model = Model()
+        wake_model = Model() # reset doesn't work
         stream.start()
         state = STATE_SLEEP
 

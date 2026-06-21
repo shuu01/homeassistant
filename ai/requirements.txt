@@ -7,4 +7,3 @@ soundfile
 numpy
 scipy
 requests
-kokoro-onnx

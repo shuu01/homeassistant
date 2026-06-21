@@ -10,8 +10,8 @@ from pydantic import BaseModel
 from kokoro_onnx import Kokoro
 
 
-MODEL = "/models/kokoro-v1.0.onnx"
-VOICES = "/models/voices-v1.0.bin"
+MODEL = "kokoro-v1.0.onnx"
+VOICES = "voices-v1.0.bin"
 
 voice = None
 app = FastAPI()
@@ -27,7 +27,7 @@ class SynthesizeRequest(BaseModel):
 def startup():
     global voice
     print(f"Loading voice: {MODEL}")
-    voice = Kokoro(MODEL, VOICES)
+    tts = Kokoro(MODEL, VOICES)
     print("Voice loaded")
 
 
@@ -43,7 +43,7 @@ def synthesize(req: SynthesizeRequest):
     if not text:
         raise HTTPException(400, "empty text")
 
-    samples, sample_rate = voice.create(
+    samples, sample_rate = tts.create(
         text,
         voice=req.voice,
         speed=req.speed,
