@@ -300,7 +300,7 @@ def main():
 
     print("Loading wake word model...")
     wake_model = Model(
-        wakeword_model_paths=['alexa'],
+        wakeword_model_paths=['/usr/local/lib/python3.12/site-packages/openwakeword/resources/models/alexa_v0.1.onnx'],
         vad_threshold=0.5
     )
 
