@@ -129,18 +129,20 @@ services:
       options:
         max-size: "10m"
         max-file: 3
-  # voice:
-  #   image: voice:latest
-  #   build:
-  #     context: .
-  #     dockerfile: ./voice/Dockerfile
-  #   container_name: voice
-  #   restart: unless-stopped
-  #   environment: {}
-  #   devices:
-  #     - /dev/snd:/dev/snd
-  #   logging:
-  #     driver: "json-file"
-  #     options:
-  #       max-size: "10m"
-  #       max-file: 3
+  kokoro:
+    image: kokoro:latest
+    build:
+      context: .
+      dockerfile: ./kokoro/Dockerfile
+    container_name: kokoro
+    restart: unless-stopped
+    environment: {}
+    # devices:
+    #   - /dev/snd:/dev/snd
+    ports:
+      - 8080:8080/tcp
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: 3
