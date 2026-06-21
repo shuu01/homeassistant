@@ -104,8 +104,8 @@ services:
     build:
       context: .
       dockerfile: ./ai/Dockerfile
-    environment:
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    env_file:
+      - .env
     container_name: ai
     restart: unless-stopped
     devices:
@@ -136,7 +136,8 @@ services:
       dockerfile: ./kokoro/Dockerfile
     container_name: kokoro
     restart: unless-stopped
-    environment: {}
+    env_file:
+      - .env
     # devices:
     #   - /dev/snd:/dev/snd
     ports:
