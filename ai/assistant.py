@@ -300,7 +300,7 @@ def main():
 
     print("Loading wake word model...")
     wake_model = Model(
-        wakeword_models=['alexa'],
+        wakeword_model_paths=['alexa'],
         vad_threshold=0.5
     )
 
