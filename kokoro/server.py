@@ -13,7 +13,7 @@ from kokoro_onnx import Kokoro
 MODEL = "kokoro-v1.0.onnx"
 VOICES = "voices-v1.0.bin"
 
-voice = None
+tts = None
 app = FastAPI()
 
 
@@ -25,7 +25,7 @@ class SynthesizeRequest(BaseModel):
 
 @app.on_event("startup")
 def startup():
-    global voice
+    global tts
     print(f"Loading voice: {MODEL}")
     tts = Kokoro(MODEL, VOICES)
     print("Voice loaded")

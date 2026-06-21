@@ -2,6 +2,10 @@ import io
 import os
 import time
 
+import re
+from queue import Queue
+import threading
+
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
@@ -47,6 +51,7 @@ STATE_SLEEP = "sleep"
 STATE_RECORD = "record"
 providers = []
 current_provider = 0
+tts_queue = Queue()
 
 
 @dataclass
@@ -55,6 +60,46 @@ class Provider:
     client: object
     fn: callable
     model: str
+
+
+def split_sentences(text):
+    return re.split(r'(?<=[.!?])\s+', text.strip())
+
+
+def tts_worker():
+    while True:
+        text = tts_queue.get()
+
+        if text is None:
+            break
+
+        print(f"Assistant: {text}")
+
+        try:
+            response = requests.post(
+                f"{VOICE_SERVER}/synthesize",
+                json={
+                    "text": text,
+                    "voice": "af_heart",
+                },
+                timeout=30,
+            )
+
+            response.raise_for_status()
+
+            audio, sample_rate = sf.read(
+                io.BytesIO(response.content),
+                dtype="float32",
+            )
+
+            if sample_rate != OUTPUT_RATE:
+                audio = resample_poly(audio, OUTPUT_RATE, sample_rate)
+
+            sd.play(audio.astype("float32"), OUTPUT_RATE, device=AUDIO_DEVICE)
+            sd.wait()
+
+        except Exception as e:
+            print(f"TTS failed: {e}")
 
 
 def speak(text):
@@ -299,10 +344,9 @@ def main():
     state = STATE_SLEEP
 
     print("Loading wake word model...")
-    wake_model = Model(
-        wakeword_model_paths=['/usr/local/lib/python3.12/site-packages/openwakeword/resources/models/alexa_v0.1.onnx'],
-        vad_threshold=0.5
-    )
+    wake_model = Model()
+
+    threading.Thread(target=tts_worker, daemon=True).start()
 
     stream = sd.InputStream(
         device=AUDIO_DEVICE,
@@ -342,7 +386,7 @@ def main():
             score = prediction.get('alexa', 0.0)
 
             if score > WAKE_THRESHOLD:
-                print(prediction)
+                print(score)
                 wake_hits += 1
             else:
                 wake_hits = 0
@@ -402,7 +446,10 @@ def main():
                     print(f"Answer failed {e}")
                     raise
 
-                speak(answer)
+                #speak(answer)
+                for sentence in split_sentences(answer):
+                    if sentence.strip():
+                        tts_queue.put(sentence)
 
         except Exception as e:
             print(e)
