@@ -19,6 +19,10 @@ from groq import Groq
 from openai import OpenAI
 from openwakeword.model import Model
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 MIC_RATE = 48000
 OUTPUT_RATE = 48000
 RATE = 16000
@@ -33,7 +37,7 @@ WHISPER_SERVER = os.getenv(
     "http://whisper:8080",
 )
 VOICE_SERVER = os.getenv(
-    "VOICE_SERVER",
+    "TTS_SERVER",
     "http://voice:8080",
 )
 
@@ -51,7 +55,9 @@ STATE_SLEEP = "sleep"
 STATE_RECORD = "record"
 providers = []
 current_provider = 0
+
 tts_queue = Queue()
+audio_queue = Queue()
 
 
 @dataclass
@@ -73,11 +79,11 @@ def tts_worker():
         if text is None:
             break
 
-        print(f"Assistant: {text}")
+        logger.info(f"Assistant: {text}")
 
         try:
             response = requests.post(
-                f"{VOICE_SERVER}/synthesize",
+                f"{TTS_SERVER}/synthesize",
                 json={
                     "text": text,
                     "voice": "af_heart",
@@ -95,18 +101,27 @@ def tts_worker():
             if sample_rate != OUTPUT_RATE:
                 audio = resample_poly(audio, OUTPUT_RATE, sample_rate)
 
-            sd.play(audio.astype("float32"), OUTPUT_RATE, device=AUDIO_DEVICE)
-            sd.wait()
+            audio_queue.put(audio)
 
         except Exception as e:
-            print(f"TTS failed: {e}")
+            logger.error(f"TTS failed: {e}")
+
+
+def audio_worker():
+    while True:
+        audio = audio_queue.get()
+        if audio is None:
+            break
+
+        sd.play(audio.astype("float32"), OUTPUT_RATE, device=AUDIO_DEVICE)
+        sd.wait()
 
 
 def speak(text):
-    print(f"Assistant: {text}")
+    logger.info(f"Assistant: {text}")
 
     response = requests.post(
-        f"{VOICE_SERVER}/synthesize",
+        f"{TTS_SERVER}/synthesize",
         json={
             "text": text,
             "voice": "af_heart",
@@ -122,7 +137,7 @@ def speak(text):
     )
 
     if sample_rate != OUTPUT_RATE:
-        print("Resample audio")
+        logger.info("Resample audio")
         audio = resample_poly(
             audio,
             OUTPUT_RATE,
@@ -158,7 +173,7 @@ def transcribe(wav_buffer):
         data = response.json()
         return data.get("text", "").strip()
     except Exception as e:
-        print(e)
+        logger.error(e)
 
 
 def ask_gemini(client, text, model):
@@ -170,7 +185,7 @@ def ask_gemini(client, text, model):
         ).text.strip()
 
     except Exception as e:
-        print(f"Gemini failed ({model}): {e}")
+        logger.error(f"Gemini failed ({model}): {e}")
 
     raise RuntimeError("Gemini unavailable")
 
@@ -189,7 +204,7 @@ def ask_groq(client, text, model):
         return response.choices[0].message.content.strip()
 
     except Exception as e:
-        print(f"Groq failed ({model}): {e}")
+        logger.error(f"Groq failed ({model}): {e}")
 
     raise RuntimeError("Groq unavailable")
 
@@ -206,7 +221,7 @@ def ask_openai(client, text, model):
         return response.output_text.strip()
 
     except Exception as e:
-        print(f"OpenAI failed ({model}): {e}")
+        logger.error(f"OpenAI failed ({model}): {e}")
 
     raise RuntimeError("OpenAI unavailable")
 
@@ -225,7 +240,7 @@ def ask_openrouter(client, text, model):
         return response.choices[0].message.content.strip()
 
     except Exception as e:
-        print(f"OpenRouter failed ({model}): {e}")
+        logger.error(f"OpenRouter failed ({model}): {e}")
 
     raise RuntimeError("OpenRouter unavailable")
 
@@ -250,7 +265,7 @@ def ask_llm(text):
             return result
 
         except Exception as e:
-            print(f"{provider.name} failed: {e}")
+            logger.error(f"{provider.name} failed: {e}")
 
     return "Sorry, I'm not available right now."
 
@@ -263,16 +278,16 @@ def wait_for_service(name, url):
                 timeout=2,
             )
             response.raise_for_status()
-            print(f"{name} ready")
+            logger.info(f"{name} ready")
             return
         except Exception:
-            print(f"waiting for {name}...")
+            logger.info(f"waiting for {name}...")
             time.sleep(5)
 
 def main():
 
     wait_for_service("whisper", WHISPER_SERVER)
-    wait_for_service("voice", VOICE_SERVER)
+    wait_for_service("tts", VOICE_SERVER)
 
     global providers
 
@@ -319,34 +334,19 @@ def main():
             )
         )
 
-    print("Enabled providers:")
+    logger.info("Enabled providers:")
 
     for provider in providers:
-        print(f"  - {provider.name}")
-
-    # Sleep mode
-    # stream.read()
-    # wake_model.predict()
-
-    # Record mode
-    # stream.read()
-    # accumulate chunks
-
-    # Stop stream
-    # transcribe
-    # ask_llm
-    # speak
-
-    # Recreate wake model
-    # start stream again
+        logger.info(f"  - {provider.name}")
 
     global state
     state = STATE_SLEEP
 
-    print("Loading wake word model...")
+    logger.info("Loading wake word model...")
     wake_model = Model()
 
     threading.Thread(target=tts_worker, daemon=True).start()
+    threading.Thread(target=audio_worker, daemon=True).start()
 
     stream = sd.InputStream(
         device=AUDIO_DEVICE,
@@ -355,10 +355,10 @@ def main():
         dtype="int16",
         blocksize=3840,
     )
-    print("Actual sample rate:", stream.samplerate)
+    logger.info("Actual sample rate:", stream.samplerate)
 
     stream.start()
-    print("Listening for wake word...")
+    logger.info("Listening for wake word...")
 
     state = STATE_SLEEP
     chunks = []
@@ -372,7 +372,7 @@ def main():
         audio, overflowed = stream.read(3840)
 
         # if overflowed:
-        #     print("Audio overflow")
+        #     logger("Audio overflow")
 
         audio = resample_poly(
             audio.flatten(),
@@ -386,7 +386,7 @@ def main():
             score = prediction.get('alexa', 0.0)
 
             if score > WAKE_THRESHOLD:
-                print(score)
+                logger.info(score)
                 wake_hits += 1
             else:
                 wake_hits = 0
@@ -394,7 +394,7 @@ def main():
             if wake_hits < 3:
                 continue
 
-            print("Wake word detected")
+            logger.info("Wake word detected")
             stream.stop()
             speak("Hi! What would you like to talk about?")
             stream.start()
@@ -410,7 +410,7 @@ def main():
         volume = np.abs(audio).mean()
 
         if volume > 200:
-            if not heard_voice: print("Speech detected")
+            if not heard_voice: logger.info("Speech detected")
 
             last_voice = time.time()
             heard_voice = True
@@ -424,7 +424,7 @@ def main():
         if not stop_recording:
             continue
 
-        print("User stopped speaking")
+        logger.info("User stopped speaking")
         stream.stop()
 
         try:
@@ -435,15 +435,15 @@ def main():
             try:
                 text = transcribe(wav_buffer)
             except Exception as e:
-                print(f"Whisper failed: {e}")
+                logger.error(f"Whisper failed: {e}")
                 continue
 
             if text:
-                print(f"Child: {text}")
+                logger.info(f"Child: {text}")
                 try:
                     answer = ask_llm(text)
                 except Exception as e:
-                    print(f"Answer failed {e}")
+                    logger.error(f"Answer failed {e}")
                     raise
 
                 #speak(answer)
@@ -452,14 +452,14 @@ def main():
                         tts_queue.put(sentence)
 
         except Exception as e:
-            print(e)
+            logger.error(e)
 
         chunks = []
         heard_voice = False
         last_voice = 0
         record_start = 0
         wake_hits = 0
-        print("Returning to sleep...")
+        logger.info("Returning to sleep...")
         #wake_model.reset()
         wake_model = Model() # reset doesn't work
         stream.start()
