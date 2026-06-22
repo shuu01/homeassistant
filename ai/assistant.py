@@ -77,6 +77,16 @@ def split_sentences(text):
     return re.split(r'(?<=[.!?])\s+', text.strip())
 
 
+def sentence_pause(text):
+    if text.endswith("?"):
+        return 0.4
+
+    if text.endswith("!"):
+        return 0.3
+
+    return 0.25
+
+
 def tts_worker():
     while True:
         text = tts_queue.get()
@@ -105,6 +115,12 @@ def tts_worker():
 
             if sample_rate != OUTPUT_RATE:
                 audio = resample_poly(audio, OUTPUT_RATE, sample_rate)
+
+            pause = np.zeros(
+                int(OUTPUT_RATE * sentence_pause(text)),
+                dtype=np.float32,
+            )
+            audio = np.concatenate([audio, pause])
 
             audio_queue.put(audio)
 

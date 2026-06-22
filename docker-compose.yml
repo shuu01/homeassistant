@@ -122,8 +122,10 @@ services:
       dockerfile: ./whisper.cpp/Dockerfile
     container_name: whisper
     restart: unless-stopped
-    devices:
-      - /dev/snd:/dev/snd
+    ports:
+      - 8081:8080/tcp
+    # devices:
+    #   - /dev/snd:/dev/snd
     logging:
       driver: "json-file"
       options:
