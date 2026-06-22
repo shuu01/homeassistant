@@ -411,12 +411,14 @@ def main():
             state = STATE_RECORD
             continue
 
-        chunks.append(audio)
+        if heard_voice:
+            chunks.append(audio)
         volume = np.abs(audio).mean()
 
         if volume > 200:
             logger.info(f"Voice volume={volume:.0f}")
-            if not heard_voice: logger.info("Speech detected")
+            if not heard_voice:
+                logger.info("Speech detected")
 
             last_voice = time.time()
             heard_voice = True
