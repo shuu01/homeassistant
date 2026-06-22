@@ -79,12 +79,12 @@ def split_sentences(text):
 
 def sentence_pause(text):
     if text.endswith("?"):
-        return 0.4
+        return 0.6
 
     if text.endswith("!"):
-        return 0.3
+        return 0.35
 
-    return 0.25
+    return 0.3
 
 
 def tts_worker():
@@ -455,6 +455,12 @@ def main():
             wav_buffer = io.BytesIO()
             write(wav_buffer, RATE, np.concatenate(chunks, axis=0))
             wav_buffer.seek(0)
+
+            sf.write(
+                "/tmp/debug.wav",
+                np.concatenate(chunks),
+                RATE,
+            )
 
             try:
                 text = transcribe(wav_buffer)
