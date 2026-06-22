@@ -41,9 +41,9 @@ WHISPER_SERVER = os.getenv(
     "WHISPER_SERVER",
     "http://whisper:8080",
 )
-VOICE_SERVER = os.getenv(
+TTS_SERVER = os.getenv(
     "TTS_SERVER",
-    "http://voice:8080",
+    "http://kokoro:8080",
 )
 
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
@@ -292,7 +292,7 @@ def wait_for_service(name, url):
 def main():
 
     wait_for_service("whisper", WHISPER_SERVER)
-    wait_for_service("tts", VOICE_SERVER)
+    wait_for_service("tts", TTS_SERVER)
 
     global providers
 
@@ -360,7 +360,7 @@ def main():
         dtype="int16",
         blocksize=3840,
     )
-    logger.info("Actual sample rate:", stream.samplerate)
+    logger.info(f"Actual sample rate: {stream.samplerate}")
 
     stream.start()
     logger.info("Listening for wake word...")
