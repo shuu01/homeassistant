@@ -37,8 +37,8 @@ CONVERSATION_IDLE_TIMEOUT = 20
 MAX_RECORD_SECONDS = 30
 SILENCE_TIMEOUT_SECONDS = 2
 
-WHISPER_SERVER = os.getenv(
-    "WHISPER_SERVER",
+STT_SERVER = os.getenv(
+    "STT_SERVER",
     "http://whisper:8080",
 )
 TTS_SERVER = os.getenv(
@@ -47,7 +47,7 @@ TTS_SERVER = os.getenv(
 )
 
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
-You are Alexa, a friendly companion for a 4 years old child.
+You are Alexa, a friendly companion for a 4-year-old child.
 
 Keep responses short.
 Be cheerful and encouraging.
@@ -169,7 +169,7 @@ def transcribe(wav_buffer):
         }
 
         response = requests.post(
-            f"{WHISPER_SERVER}/inference",
+            f"{STT_SERVER}/inference",
             files=files,
             timeout=60,
         )
@@ -291,7 +291,7 @@ def wait_for_service(name, url):
 
 def main():
 
-    wait_for_service("whisper", WHISPER_SERVER)
+    wait_for_service("stt", STT_SERVER)
     wait_for_service("tts", TTS_SERVER)
 
     global providers
@@ -415,6 +415,7 @@ def main():
         volume = np.abs(audio).mean()
 
         if volume > 200:
+            logger.info(f"Voice volume={volume:.0f}")
             if not heard_voice: logger.info("Speech detected")
 
             last_voice = time.time()
@@ -440,7 +441,7 @@ def main():
             try:
                 text = transcribe(wav_buffer)
             except Exception as e:
-                logger.error(f"Whisper failed: {e}")
+                logger.error(f"STT failed: {e}")
                 continue
 
             if text:
