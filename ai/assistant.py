@@ -63,6 +63,8 @@ current_provider = 0
 
 tts_queue = Queue()
 audio_queue = Queue()
+audio_input_queue = Queue(maxsize=200)
+speaking_event = threading.Event()
 
 
 @dataclass
@@ -85,6 +87,24 @@ def sentence_pause(text):
         return 0.35
 
     return 0.3
+
+
+def callback(indata, frames, time_info, status):
+    if status:
+        logger.warning(f"Audio status: {status}")
+
+    try:
+        audio_input_queue.put_nowait(indata.copy())
+    except queue.Full:
+        logger.warning("Audio queue full")
+
+
+def clear_audio_queue():
+    while True:
+        try:
+            audio_input_queue.get_nowait()
+        except Exception:
+            break
 
 
 def tts_worker():
@@ -134,8 +154,11 @@ def audio_worker():
         if audio is None:
             break
 
+        speaking_event.set()
+        clear_audio_queue()
         sd.play(audio.astype("float32"), OUTPUT_RATE, device=AUDIO_DEVICE)
         sd.wait()
+        speaking_event.clear()
 
 
 def speak(text):
@@ -375,6 +398,7 @@ def main():
         channels=1,
         dtype="int16",
         blocksize=3840,
+        callback=callback,
     )
     logger.info(f"Actual sample rate: {stream.samplerate}")
 
@@ -390,10 +414,12 @@ def main():
 
     while True:
 
-        audio, overflowed = stream.read(3840)
+        audio = audio_input_queue.get()
 
-        # if overflowed:
-        #     logger("Audio overflow")
+        if speaking_event.is_set():
+            # drop all accumulated microphone data
+            clear_audio_queue()
+            continue
 
         audio = resample_poly(
             audio.flatten(),
@@ -416,9 +442,8 @@ def main():
                 continue
 
             logger.info("Wake word detected")
-            stream.stop()
-            speak("Hi! What would you like to talk about?")
-            stream.start()
+            clear_audio_queue()
+            tts_queue.put("Hi! What would you like to talk about?")
 
             chunks = []
             last_voice = time.time()
@@ -427,8 +452,8 @@ def main():
             state = STATE_RECORD
             continue
 
-        if heard_voice:
-            chunks.append(audio)
+        #if heard_voice:
+        chunks.append(audio)
         volume = np.abs(audio).mean()
 
         if volume > 200:
@@ -449,7 +474,7 @@ def main():
             continue
 
         logger.info("User stopped speaking")
-        stream.stop()
+        clear_audio_queue()
 
         try:
             wav_buffer = io.BytesIO()
@@ -492,7 +517,6 @@ def main():
         logger.info("Returning to sleep...")
         #wake_model.reset()
         wake_model = Model() # reset doesn't work
-        stream.start()
         state = STATE_SLEEP
 
 if __name__ == "__main__":

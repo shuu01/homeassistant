@@ -33,10 +33,10 @@ RUN apt-get update && \
 COPY --from=builder /src/build/bin/whisper-server /usr/local/bin/whisper-server
 
 WORKDIR /models
-RUN wget -O /models/ggml-base.en.bin \
-    https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
+RUN wget -O /models/ggml-tiny.en.bin \
+    https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin
 
 EXPOSE 8080
 
-CMD ["/usr/local/bin/whisper-server", "-m", "/models/ggml-base.en.bin", \
+CMD ["/usr/local/bin/whisper-server", "-m", "/models/ggml-tiny.en.bin", \
   "--host", "0.0.0.0", "--port", "8080"]
