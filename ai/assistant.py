@@ -3,7 +3,7 @@ import os
 import time
 
 import re
-from queue import Queue
+from queue import Queue, Full
 import threading
 
 import numpy as np
@@ -32,6 +32,8 @@ MIC_RATE = 48000
 OUTPUT_RATE = 48000
 RATE = 16000
 AUDIO_DEVICE = int(os.getenv("AUDIO_DEVICE", "4"))
+INPUT_DEVICE = int(os.getenv("INPUT_DEVICE", "0"))
+OUTPUT_DEVICE = int(os.getenv("OUTPUT_DEVICE", "4"))
 WAKE_THRESHOLD = float(os.getenv("WAKE_THRESHOLD", "0.5"))
 CONVERSATION_IDLE_TIMEOUT = 20
 MAX_RECORD_SECONDS = 30
@@ -92,10 +94,9 @@ def sentence_pause(text):
 def callback(indata, frames, time_info, status):
     if status:
         logger.warning(f"Audio status: {status}")
-
     try:
         audio_input_queue.put_nowait(indata.copy())
-    except queue.Full:
+    except Full:
         logger.warning("Audio queue full")
 
 
@@ -156,7 +157,7 @@ def audio_worker():
 
         speaking_event.set()
         clear_audio_queue()
-        sd.play(audio.astype("float32"), OUTPUT_RATE, device=AUDIO_DEVICE)
+        sd.play(audio.astype("float32"), OUTPUT_RATE, device=OUTPUT_DEVICE)
         sd.wait()
         speaking_event.clear()
 
@@ -191,7 +192,7 @@ def speak(text):
     sd.play(
         audio.astype("float32"),
         OUTPUT_RATE,
-        device=AUDIO_DEVICE,
+        device=OUTPUT_DEVICE,
     )
 
     sd.wait()
@@ -393,12 +394,13 @@ def main():
     threading.Thread(target=audio_worker, daemon=True).start()
 
     stream = sd.InputStream(
-        device=AUDIO_DEVICE,
+        device=INPUT_DEVICE,
         samplerate=MIC_RATE,
         channels=1,
         dtype="int16",
-        blocksize=3840,
+        blocksize=9600,
         callback=callback,
+        latency="high",
     )
     logger.info(f"Actual sample rate: {stream.samplerate}")
 
@@ -411,8 +413,15 @@ def main():
     last_voice = 0
     ignore_wake_until = 0
     wake_hits = 0
+    last_queue_log = 0
 
     while True:
+
+        if time.time() - last_queue_log > 5:
+            logger.info(
+                f"audio_input_queue = {audio_input_queue.qsize()}"
+            )
+            last_queue_log = time.time()
 
         audio = audio_input_queue.get()
 
