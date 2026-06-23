@@ -28,7 +28,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MIC_RATE = 48000
+MIC_RATE = 44100
 OUTPUT_RATE = 48000
 RATE = 16000
 AUDIO_DEVICE = int(os.getenv("AUDIO_DEVICE", "4"))
@@ -398,7 +398,7 @@ def main():
         samplerate=MIC_RATE,
         channels=1,
         dtype="int16",
-        blocksize=9600,
+        blocksize=3840,
         callback=callback,
         latency="high",
     )
@@ -432,8 +432,8 @@ def main():
 
         audio = resample_poly(
             audio.flatten(),
-            up=1,
-            down=3,
+            RATE,
+            MIC_RATE,
         ).astype(np.int16)
 
         if state == STATE_SLEEP:
