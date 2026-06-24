@@ -49,8 +49,8 @@ chunks = []
 
 tts_queue = Queue()
 audio_queue = Queue()
-audio_input_queue = Queue(maxsize=100)
-wakeword_queue = Queue(maxsize=100)
+audio_input_queue = Queue(maxsize=20)
+wakeword_queue = Queue(maxsize=20)
 speaking_event = threading.Event()
 wake_event = threading.Event()
 recording_event = threading.Event()
@@ -161,6 +161,7 @@ def wakeword_worker():
         score = prediction.get("alexa", 0.0)
 
         if score > WAKE_THRESHOLD:
+            logger.info(f"prediction score: {score}")
             wake_hits += 1
         else:
             wake_hits = 0
