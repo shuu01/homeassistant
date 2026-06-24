@@ -78,7 +78,7 @@ def callback(indata, frames, time_info, status):
         return
 
     if status:
-        logger.warning(f"Audio status: {status}")
+        logger.debug(f"Audio status: {status}")
 
     block = indata.copy()
     try:
