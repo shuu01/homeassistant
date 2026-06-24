@@ -14,10 +14,9 @@ from scipy.signal import resample_poly
 from dataclasses import dataclass
 
 import requests
-from google import genai
-from groq import Groq
-from openai import OpenAI
 from openwakeword.model import Model
+
+from llm import LLM
 
 import logging
 
@@ -31,12 +30,10 @@ logger = logging.getLogger(__name__)
 MIC_RATE = 44100
 OUTPUT_RATE = 48000
 RATE = 16000
-AUDIO_DEVICE = int(os.getenv("AUDIO_DEVICE", "4"))
 INPUT_DEVICE = int(os.getenv("INPUT_DEVICE", "0"))
 OUTPUT_DEVICE = int(os.getenv("OUTPUT_DEVICE", "4"))
 WAKE_THRESHOLD = float(os.getenv("WAKE_THRESHOLD", "0.5"))
-CONVERSATION_IDLE_TIMEOUT = 20
-MAX_RECORD_SECONDS = 30
+MAX_RECORD_SECONDS = 20
 SILENCE_TIMEOUT_SECONDS = 2
 
 STT_SERVER = os.getenv(
@@ -48,33 +45,17 @@ TTS_SERVER = os.getenv(
     "http://kokoro:8080",
 )
 
-SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
-You are Alexa, a friendly companion for a 4-year-old child.
-
-Keep responses short.
-Be cheerful and encouraging.
-Tell stories when asked.
-Never be scary.
-No emojis in responses.
-""")
-
-STATE_SLEEP = "sleep"
-STATE_RECORD = "record"
-providers = []
-current_provider = 0
+chunks = []
 
 tts_queue = Queue()
 audio_queue = Queue()
-audio_input_queue = Queue(maxsize=200)
+audio_input_queue = Queue(maxsize=100)
+wakeword_queue = Queue(maxsize=100)
 speaking_event = threading.Event()
-
-
-@dataclass
-class Provider:
-    name: str
-    client: object
-    fn: callable
-    model: str
+wake_event = threading.Event()
+recording_event = threading.Event()
+audio_done = threading.Event()
+recording_done = threading.Event()
 
 
 def split_sentences(text):
@@ -92,20 +73,103 @@ def sentence_pause(text):
 
 
 def callback(indata, frames, time_info, status):
+
+    if speaking_event.is_set():
+        return
+
     if status:
         logger.warning(f"Audio status: {status}")
+
+    block = indata.copy()
     try:
-        audio_input_queue.put_nowait(indata.copy())
+        audio_input_queue.put_nowait(block)
     except Full:
-        logger.warning("Audio queue full")
-
-
-def clear_audio_queue():
-    while True:
+        pass
+    if not recording_event.is_set():
         try:
-            audio_input_queue.get_nowait()
-        except Exception:
-            break
+            wakeword_queue.put_nowait(block)
+        except Full:
+            pass
+
+
+def record_worker():
+    heard_voice = False
+    last_voice = 0
+    record_start = 0
+
+    while True:
+        audio = audio_input_queue.get()
+        if not recording_event.is_set():
+            continue
+        if not record_start:
+            record_start = time.time()
+
+        audio = resample_poly(
+            audio.flatten(),
+            RATE,
+            MIC_RATE,
+        ).astype(np.int16)
+
+        chunks.append(audio)
+        volume = np.abs(audio).mean()
+
+        if volume > 200:
+            logger.info(f"Voice volume={volume:.0f}")
+            if not heard_voice:
+                logger.info("Speech detected")
+
+            last_voice = time.time()
+            heard_voice = True
+
+        stop_recording = (
+            (heard_voice and time.time() - last_voice > SILENCE_TIMEOUT_SECONDS)
+            or
+            (time.time() - record_start > MAX_RECORD_SECONDS)
+        )
+        if not stop_recording:
+            continue
+
+        logger.info("User stopped speaking")
+        recording_event.clear()
+        recording_done.set()
+        record_start = 0
+        last_voice = 0
+        heard_voice = False
+
+
+def wakeword_worker():
+
+    wake_model = Model()
+    wake_hits = 0
+
+    while True:
+
+        audio = wakeword_queue.get()
+
+        if recording_event.is_set():
+            continue
+        if speaking_event.is_set():
+            continue
+
+        audio = resample_poly(
+            audio.flatten(),
+            RATE,
+            MIC_RATE,
+        ).astype(np.int16)
+
+        prediction = wake_model.predict(audio)
+        score = prediction.get("alexa", 0.0)
+
+        if score > WAKE_THRESHOLD:
+            wake_hits += 1
+        else:
+            wake_hits = 0
+
+        if wake_hits >= 3:
+            logger.info("Wake word detected")
+            wake_event.set()
+            wake_hits = 0
+            wake_model.reset()
 
 
 def tts_worker():
@@ -154,48 +218,12 @@ def audio_worker():
         audio = audio_queue.get()
         if audio is None:
             break
-
+        audio_done.clear()
         speaking_event.set()
-        clear_audio_queue()
         sd.play(audio.astype("float32"), OUTPUT_RATE, device=OUTPUT_DEVICE)
         sd.wait()
         speaking_event.clear()
-
-
-def speak(text):
-    logger.info(f"Assistant: {text}")
-
-    response = requests.post(
-        f"{TTS_SERVER}/synthesize",
-        json={
-            "text": text,
-            "voice": "af_heart",
-        },
-        timeout=30,
-    )
-
-    response.raise_for_status()
-
-    audio, sample_rate = sf.read(
-        io.BytesIO(response.content),
-        dtype="float32",
-    )
-
-    if sample_rate != OUTPUT_RATE:
-        logger.info("Resample audio")
-        audio = resample_poly(
-            audio,
-            OUTPUT_RATE,
-            sample_rate,
-        )
-
-    sd.play(
-        audio.astype("float32"),
-        OUTPUT_RATE,
-        device=OUTPUT_DEVICE,
-    )
-
-    sd.wait()
+        audio_done.set()
 
 
 def transcribe(wav_buffer):
@@ -221,100 +249,6 @@ def transcribe(wav_buffer):
         logger.error(e)
 
 
-def ask_gemini(client, text, model):
-
-    try:
-        return client.models.generate_content(
-            model=model,
-            contents=text
-        ).text.strip()
-
-    except Exception as e:
-        logger.error(f"Gemini failed ({model}): {e}")
-
-    raise RuntimeError("Gemini unavailable")
-
-
-def ask_groq(client, text, model):
-
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": text}
-            ]
-        )
-
-        return response.choices[0].message.content.strip()
-
-    except Exception as e:
-        logger.error(f"Groq failed ({model}): {e}")
-
-    raise RuntimeError("Groq unavailable")
-
-
-def ask_openai(client, text, model):
-
-    try:
-        response = client.responses.create(
-            model=model,
-            instructions=SYSTEM_PROMPT,
-            input=text,
-        )
-
-        return response.output_text.strip()
-
-    except Exception as e:
-        logger.error(f"OpenAI failed ({model}): {e}")
-
-    raise RuntimeError("OpenAI unavailable")
-
-
-def ask_openrouter(client, text, model):
-
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": text}
-            ]
-        )
-
-        return response.choices[0].message.content.strip()
-
-    except Exception as e:
-        logger.error(f"OpenRouter failed ({model}): {e}")
-
-    raise RuntimeError("OpenRouter unavailable")
-
-
-def ask_llm(text):
-    global current_provider
-
-    if not providers:
-        return "No AI providers configured."
-
-    prompt = f"Child: {text}"
-
-    for offset in range(len(providers)):
-        idx = (current_provider + offset) % len(providers)
-
-        try:
-            provider = providers[idx]
-            if provider.name == "gemini":
-                prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
-            result = provider.fn(provider.client, prompt, provider.model)
-            current_provider = idx
-            return result
-
-        except Exception as e:
-            logger.error(f"{provider.name} failed: {e}")
-
-    return "Sorry, I'm not available right now."
-
-
 def wait_for_service(name, url):
     while True:
         try:
@@ -334,64 +268,12 @@ def main():
     wait_for_service("stt", STT_SERVER)
     wait_for_service("tts", TTS_SERVER)
 
-    global providers
-
-    if key := os.getenv("GEMINI_API_KEY"):
-        providers.append(
-            Provider(
-                name = "gemini",
-                client = genai.Client(api_key=key),
-                fn = ask_gemini,
-                model = "models/gemini-2.5-flash",
-            )
-        )
-
-    if key := os.getenv("GROQ_API_KEY"):
-        providers.append(
-            Provider(
-                name = "groq",
-                client = Groq(api_key=key),
-                fn = ask_groq,
-                model = "llama-3.3-70b-versatile",
-            )
-        )
-
-    if key := os.getenv("OPENROUTER_API_KEY"):
-        providers.append(
-            Provider(
-                name = "openrouter",
-                client = OpenAI(
-                    api_key=key,
-                    base_url="https://openrouter.ai/api/v1"
-                ),
-                fn = ask_openrouter,
-                model = "openrouter/free",
-            )
-        )
-
-    if key := os.getenv("OPENAI_API_KEY"):
-        providers.append(
-            Provider(
-                name = "openai",
-                client = OpenAI(api_key=key),
-                fn = ask_openai,
-                model = "gpt-5-nano",
-            )
-        )
-
-    logger.info("Enabled providers:")
-
-    for provider in providers:
-        logger.info(f"  - {provider.name}")
-
-    global state
-    state = STATE_SLEEP
-
-    logger.info("Loading wake word model...")
-    wake_model = Model()
-
     threading.Thread(target=tts_worker, daemon=True).start()
     threading.Thread(target=audio_worker, daemon=True).start()
+    threading.Thread(target=wakeword_worker, daemon=True).start()
+    threading.Thread(target=record_worker, daemon=True).start()
+
+    llm = LLM()
 
     stream = sd.InputStream(
         device=INPUT_DEVICE,
@@ -407,83 +289,21 @@ def main():
     stream.start()
     logger.info("Listening for wake word...")
 
-    state = STATE_SLEEP
-    chunks = []
-    heard_voice = False
-    last_voice = 0
-    ignore_wake_until = 0
-    wake_hits = 0
-    last_queue_log = 0
-
     while True:
 
-        if time.time() - last_queue_log > 5:
-            logger.info(
-                f"audio_input_queue = {audio_input_queue.qsize()}"
-            )
-            last_queue_log = time.time()
+        wake_event.clear()
+        wake_event.wait()
 
-        audio = audio_input_queue.get()
-
-        if speaking_event.is_set():
-            # drop all accumulated microphone data
-            clear_audio_queue()
-            continue
-
-        audio = resample_poly(
-            audio.flatten(),
-            RATE,
-            MIC_RATE,
-        ).astype(np.int16)
-
-        if state == STATE_SLEEP:
-
-            prediction = wake_model.predict(audio)
-            score = prediction.get('alexa', 0.0)
-
-            if score > WAKE_THRESHOLD:
-                logger.info(score)
-                wake_hits += 1
-            else:
-                wake_hits = 0
-
-            if wake_hits < 3:
-                continue
-
-            logger.info("Wake word detected")
-            clear_audio_queue()
-            tts_queue.put("Hi! What would you like to talk about?")
-
-            chunks = []
-            last_voice = time.time()
-            record_start = time.time()
-            heard_voice = False
-            state = STATE_RECORD
-            continue
-
-        #if heard_voice:
-        chunks.append(audio)
-        volume = np.abs(audio).mean()
-
-        if volume > 200:
-            logger.info(f"Voice volume={volume:.0f}")
-            if not heard_voice:
-                logger.info("Speech detected")
-
-            last_voice = time.time()
-            heard_voice = True
-
-        stop_recording = (
-            (heard_voice and time.time() - last_voice > SILENCE_TIMEOUT_SECONDS)
-            or
-            (time.time() - record_start > MAX_RECORD_SECONDS)
+        audio_done.clear()
+        tts_queue.put(
+            "Hi! What would you like to talk about?"
         )
-
-        if not stop_recording:
-            continue
-
-        logger.info("User stopped speaking")
-        clear_audio_queue()
+        audio_done.wait()
+        while not audio_input_queue.empty():
+            audio_input_queue.get_nowait()
+        recording_event.set()
+        recording_done.clear()
+        recording_done.wait()
 
         try:
             wav_buffer = io.BytesIO()
@@ -505,12 +325,11 @@ def main():
             if text:
                 logger.info(f"Child: {text}")
                 try:
-                    answer = ask_llm(text)
+                    answer = llm.ask(text)
                 except Exception as e:
                     logger.error(f"Answer failed {e}")
                     raise
 
-                #speak(answer)
                 for sentence in split_sentences(answer):
                     if sentence.strip():
                         tts_queue.put(sentence)
@@ -518,15 +337,9 @@ def main():
         except Exception as e:
             logger.error(e)
 
-        chunks = []
-        heard_voice = False
-        last_voice = 0
-        record_start = 0
-        wake_hits = 0
+        chunks.clear()
         logger.info("Returning to sleep...")
-        #wake_model.reset()
-        wake_model = Model() # reset doesn't work
-        state = STATE_SLEEP
+
 
 if __name__ == "__main__":
     main()
