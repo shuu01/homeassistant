@@ -64,12 +64,12 @@ def split_sentences(text):
 
 def sentence_pause(text):
     if text.endswith("?"):
-        return 0.6
+        return 0.8
 
     if text.endswith("!"):
-        return 0.35
+        return 0.6
 
-    return 0.3
+    return 0.5
 
 
 def callback(indata, frames, time_info, status):
@@ -245,7 +245,17 @@ def transcribe(wav_buffer):
 
         response.raise_for_status()
         data = response.json()
-        return data.get("text", "").strip()
+        text = data.get("text", "").strip()
+        confidence = data.get("confidence", "")
+        logger.info(f"confidence: {confidence}")
+        # filter gibberish
+        if re.fullmatch(r"\([^)]*\)", text):
+            return ""
+        if re.fullmatch(r"\[[^\]]*\]", text):
+            return ""
+        if len(text) < 3:
+            return ""
+        return text
     except Exception as e:
         logger.error(e)
 
