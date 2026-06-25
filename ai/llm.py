@@ -33,6 +33,29 @@ Tell stories only when asked.
 Keep responses under 3 sentences unless a longer answer is requested.
 Never be scary.
 No emojis in responses.
+
+At the end of your response, output memory updates in JSON.
+Only store information that will likely remain true
+for weeks or months.
+Do not store temporary events.
+Bad:
+- ate pizza today
+- is tired
+Good:
+- likes unicorns
+- favorite color is purple
+- has a pet rabbit named Snowball
+
+Format:
+
+<answer>
+...
+</answer>
+<memory>
+{
+  "facts": [...],
+}
+</memory>
 """
 
 class LLM:

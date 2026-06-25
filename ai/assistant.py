@@ -363,7 +363,11 @@ def main():
             if text:
                 logger.info(f"Child: {text}")
                 try:
-                    answer = llm.ask(text)
+                    response = llm.ask(text)
+                    answer = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL).group(1).strip()
+                    memory = re.search(r"<memory>(.*?)</memory>", response, re.DOTALL).group(1)
+                    logger.info(memory)
+                    # update_memory(memory) TODO
                 except Exception as e:
                     logger.error(f"Answer failed {e}")
                     raise
