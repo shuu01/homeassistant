@@ -33,6 +33,7 @@ RATE = 16000
 INPUT_DEVICE = int(os.getenv("INPUT_DEVICE", "0"))
 OUTPUT_DEVICE = int(os.getenv("OUTPUT_DEVICE", "4"))
 WAKE_THRESHOLD = float(os.getenv("WAKE_THRESHOLD", "0.5"))
+VOLUME_THRESHOLD = int(os.getenv("VOLUME_THRESHOLD", "200"))
 MAX_RECORD_SECONDS = 20
 SILENCE_TIMEOUT_SECONDS = 3
 WAIT_FOR_SPEECH_TIMEOUT = 10
@@ -114,7 +115,7 @@ def record_worker():
 
         if not speech_started:
 
-            if volume > 200:
+            if volume > VOLUME_THRESHOLD:
                 logger.info("Speech detected")
                 speech_started = True
                 record_start = time.time()
@@ -133,7 +134,7 @@ def record_worker():
 
         chunks.append(audio)
 
-        if volume > 200:
+        if volume > VOLUME_THRESHOLD:
             logger.info(f"Voice volume={volume:.0f}")
             last_voice = time.time()
 
