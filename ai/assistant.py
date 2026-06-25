@@ -20,8 +20,10 @@ from llm import LLM
 
 import logging
 
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s %(levelname)s %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
