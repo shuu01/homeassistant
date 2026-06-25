@@ -107,6 +107,9 @@ def record_worker():
         if not recording_event.is_set():
             continue
 
+        if wait_start == 0:
+            wait_start = time.time()
+
         audio = resample_poly(
             audio.flatten(),
             RATE,
