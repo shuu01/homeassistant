@@ -365,13 +365,15 @@ def main():
                 logger.info(f"Child: {text}")
                 try:
                     response = llm.ask(text)
+                    response = re.sub(r"^```json\s*", "", response.strip())
+                    response = re.sub(r"\s*```$", "", response)
                     answer = response
                     logger.info(answer)
                     try:
                         data = json.loads(response)
                         if isinstance(data, dict):
-                            answer = data["answer"]
-                            memory = data["memory"]
+                            answer = data.get("answer", "")
+                            memory = data.get("memory", [])
                             logger.info(memory)
                             # update_memory(memory) TODO
                     except Exception as e:
