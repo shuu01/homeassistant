@@ -366,12 +366,16 @@ def main():
                 try:
                     response = llm.ask(text)
                     answer = response
-                    data = json.loads(response)
-                    if isinstance(data, dict):
-                        answer = data["answer"]
-                        memory = data["memory"]
-                        logger.info(memory)
-                        # update_memory(memory) TODO
+                    logger.info(answer)
+                    try:
+                        data = json.loads(response)
+                        if isinstance(data, dict):
+                            answer = data["answer"]
+                            memory = data["memory"]
+                            logger.info(memory)
+                            # update_memory(memory) TODO
+                    except Exception as e:
+                        pass
                 except Exception as e:
                     logger.error(f"Answer failed {e}")
                     raise
