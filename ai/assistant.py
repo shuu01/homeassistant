@@ -1,8 +1,9 @@
 import io
 import os
 import time
-
+import json
 import re
+
 from queue import Queue, Full
 import threading
 
@@ -364,10 +365,13 @@ def main():
                 logger.info(f"Child: {text}")
                 try:
                     response = llm.ask(text)
-                    answer = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL).group(1).strip()
-                    memory = re.search(r"<memory>(.*?)</memory>", response, re.DOTALL).group(1)
-                    logger.info(memory)
-                    # update_memory(memory) TODO
+                    answer = response
+                    data = json.loads(response)
+                    if isinstance(data, dict):
+                        answer = data["answer"]
+                        memory = data["memory"]
+                        logger.info(memory)
+                        # update_memory(memory) TODO
                 except Exception as e:
                     logger.error(f"Answer failed {e}")
                     raise

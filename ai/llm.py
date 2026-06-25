@@ -46,16 +46,15 @@ Good:
 - favorite color is purple
 - has a pet rabbit named Snowball
 
-Format:
+Return ONLY valid JSON:
 
-<answer>
-...
-</answer>
-<memory>
 {
-  "facts": [...],
+  "answer": "...",
+  "memory": [
+    "...",
+    "..."
+  ]
 }
-</memory>
 """
 
 class LLM:
