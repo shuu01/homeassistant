@@ -368,13 +368,13 @@ def main():
                     response = re.sub(r"^```json\s*", "", response.strip())
                     response = re.sub(r"\s*```$", "", response)
                     answer = response
-                    logger.info(answer)
+                    logger.debug(answer)
                     try:
                         data = json.loads(response)
                         if isinstance(data, dict):
                             answer = data.get("answer", "")
                             memory = data.get("memory", [])
-                            logger.info(memory)
+                            logger.info(f"memory: {memory}")
                             # update_memory(memory) TODO
                     except Exception as e:
                         pass
