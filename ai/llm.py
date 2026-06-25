@@ -50,13 +50,15 @@ Good:
 - favorite color is purple
 - has a pet rabbit named Snowball
 
+memory must be an array of strings.
+Never use objects.
+Never use booleans.
+Never use nested JSON.
+
 Format:
 {
   "answer": "...",
-  "memory": [
-    "...",
-    "..."
-  ]
+  "memory": ["...", "..."]
 }
 """
 
