@@ -34,7 +34,8 @@ INPUT_DEVICE = int(os.getenv("INPUT_DEVICE", "0"))
 OUTPUT_DEVICE = int(os.getenv("OUTPUT_DEVICE", "4"))
 WAKE_THRESHOLD = float(os.getenv("WAKE_THRESHOLD", "0.5"))
 MAX_RECORD_SECONDS = 20
-SILENCE_TIMEOUT_SECONDS = 2
+SILENCE_TIMEOUT_SECONDS = 3
+WAIT_FOR_SPEECH_TIMEOUT = 10
 
 STT_SERVER = os.getenv(
     "STT_SERVER",
@@ -93,16 +94,15 @@ def callback(indata, frames, time_info, status):
 
 
 def record_worker():
-    heard_voice = False
     last_voice = 0
     record_start = 0
+    speech_started = False
+    wait_start = 0
 
     while True:
         audio = audio_input_queue.get()
         if not recording_event.is_set():
             continue
-        if not record_start:
-            record_start = time.time()
 
         audio = resample_poly(
             audio.flatten(),
@@ -110,31 +110,49 @@ def record_worker():
             MIC_RATE,
         ).astype(np.int16)
 
-        chunks.append(audio)
         volume = np.abs(audio).mean()
+
+        if not speech_started:
+
+            if volume > 200:
+                logger.info("Speech detected")
+                speech_started = True
+                record_start = time.time()
+                last_voice = time.time()
+                chunks.clear()
+                chunks.append(audio)
+            elif time.time() - wait_start > WAIT_FOR_SPEECH_TIMEOUT:
+                logger.info("No speech detected")
+                recording_event.clear()
+                recording_done.set()
+                speech_started = False
+                wait_start = 0
+                record_start = 0
+                last_voice = 0
+            continue
+
+        chunks.append(audio)
 
         if volume > 200:
             logger.info(f"Voice volume={volume:.0f}")
-            if not heard_voice:
-                logger.info("Speech detected")
-
             last_voice = time.time()
-            heard_voice = True
 
         stop_recording = (
-            (heard_voice and time.time() - last_voice > SILENCE_TIMEOUT_SECONDS)
+            (time.time() - last_voice > SILENCE_TIMEOUT_SECONDS)
             or
             (time.time() - record_start > MAX_RECORD_SECONDS)
         )
+
         if not stop_recording:
             continue
 
         logger.info("User stopped speaking")
         recording_event.clear()
         recording_done.set()
+        speech_started = False
+        wait_start = 0
         record_start = 0
         last_voice = 0
-        heard_voice = False
 
 
 def wakeword_worker():
@@ -246,8 +264,6 @@ def transcribe(wav_buffer):
         response.raise_for_status()
         data = response.json()
         text = data.get("text", "").strip()
-        confidence = data.get("confidence", "")
-        logger.info(f"confidence: {confidence}")
         # filter gibberish
         if re.fullmatch(r"\([^)]*\)", text):
             return ""
@@ -315,6 +331,10 @@ def main():
         recording_event.set()
         recording_done.clear()
         recording_done.wait()
+
+        if not chunks:
+            logger.info("No speech captured")
+            continue
 
         try:
             wav_buffer = io.BytesIO()
