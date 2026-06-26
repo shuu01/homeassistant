@@ -55,7 +55,7 @@ Never use objects.
 Never use booleans.
 Never use nested JSON.
 
-Format:
+Response format:
 {
   "answer": "...",
   "memory": ["...", "..."]

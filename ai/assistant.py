@@ -3,13 +3,14 @@ import os
 import time
 import json
 import re
-
-from queue import Queue, Full
+import random
 import threading
-
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
+
+from queue import Queue, Full
+from pathlib import Path
 from scipy.io.wavfile import write
 from scipy.signal import resample_poly
 from dataclasses import dataclass
@@ -29,6 +30,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+GREETINGS_DIR = Path(os.getenv("GREETINGS_DIR", "./"))
+GREETINGS = list(GREETINGS_DIR.glob("*.wav"))
 
 MIC_RATE = 44100
 OUTPUT_RATE = 48000
@@ -53,13 +57,12 @@ TTS_SERVER = os.getenv(
 chunks = []
 
 tts_queue = Queue()
-audio_queue = Queue()
+audio_output_queue = Queue()
 audio_input_queue = Queue(maxsize=20)
 wakeword_queue = Queue(maxsize=20)
 speaking_event = threading.Event()
 wake_event = threading.Event()
 recording_event = threading.Event()
-audio_done = threading.Event()
 recording_done = threading.Event()
 
 
@@ -203,12 +206,11 @@ def tts_worker():
     while True:
         text = tts_queue.get()
 
-        if text is None:
-            break
-
-        logger.info(f"Assistant: {text}")
-
         try:
+            if text is None:
+                return
+            logger.info(f"Assistant: {text}")
+
             response = requests.post(
                 f"{TTS_SERVER}/synthesize",
                 json={
@@ -234,23 +236,39 @@ def tts_worker():
             )
             audio = np.concatenate([audio, pause])
 
-            audio_queue.put(audio)
+            audio_output_queue.put(audio)
 
         except Exception as e:
             logger.error(f"TTS failed: {e}")
+        finally:
+            tts_queue.task_done()
 
 
 def audio_worker():
     while True:
-        audio = audio_queue.get()
+        audio = audio_output_queue.get()
         if audio is None:
             break
-        audio_done.clear()
+
         speaking_event.set()
         sd.play(audio.astype("float32"), OUTPUT_RATE, device=OUTPUT_DEVICE)
         sd.wait()
+        audio_output_queue.task_done()
         speaking_event.clear()
-        audio_done.set()
+
+
+def greeting():
+    if not GREETINGS:
+        logger.warning("No greeting samples found")
+        tts_queue.put(
+            "Hi! What would you like to talk about?"
+        )
+        return
+    filename = random.choice(GREETINGS)
+    audio, sample_rate = sf.read(filename, dtype="float32")
+    if sample_rate != OUTPUT_RATE:
+        audio = resample_poly(audio, OUTPUT_RATE, sample_rate)
+    audio_output_queue.put(audio)
 
 
 def transcribe(wav_buffer):
@@ -329,13 +347,11 @@ def main():
         wake_event.clear()
         wake_event.wait()
 
-        audio_done.clear()
-        tts_queue.put(
-            "Hi! What would you like to talk about?"
-        )
-        audio_done.wait()
-        while not audio_input_queue.empty():
-            audio_input_queue.get_nowait()
+        greeting()
+        tts_queue.join()
+        audio_output_queue.join()
+        #while not audio_input_queue.empty():
+        #    audio_input_queue.get_nowait()
         recording_event.set()
         recording_done.clear()
         recording_done.wait()
@@ -364,6 +380,18 @@ def main():
             if text:
                 logger.info(f"Child: {text}")
                 try:
+                    # prompt = f"""
+                    #     {system_prompt}
+
+                    #     Recent conversation:
+                    #     {conversation_text}
+
+                    #     Child facts:
+                    #     {facts_text}
+
+                    #     Current question:
+                    #     {text}
+                    #     """
                     response = llm.ask(text)
                     response = re.sub(r"^```json\s*", "", response.strip())
                     response = re.sub(r"\s*```$", "", response)
@@ -388,7 +416,8 @@ def main():
 
         except Exception as e:
             logger.error(e)
-
+        tts_queue.join()
+        audio_output_queue.join()
         chunks.clear()
         logger.info("Returning to sleep...")
 
