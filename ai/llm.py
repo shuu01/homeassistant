@@ -42,6 +42,8 @@ At the end of your response, attach memory updates.
 Only store information that will likely remain true
 for weeks or months.
 Do not store temporary events.
+The "facts" field is ONLY for facts that the child explicitly states about themselves.
+Never infer, assume, or guess.
 Bad:
 - ate pizza today
 - is tired
@@ -50,7 +52,7 @@ Good:
 - favorite color is purple
 - has a pet rabbit named Snowball
 
-memory must be an array of strings.
+facts must be an array of strings.
 Never use objects.
 Never use booleans.
 Never use nested JSON.
@@ -58,7 +60,7 @@ Never use nested JSON.
 Response format:
 {
   "answer": "...",
-  "memory": ["...", "..."]
+  "facts": ["...", "..."]
 }
 """
 
@@ -68,10 +70,7 @@ class LLM:
         self.client = None
         self.current = 0
         self._load_providers()
-        self.system_prompt = os.getenv(
-            "SYSTEM_PROMPT",
-            SYSTEM_PROMPT,
-        )
+        self.system_prompt = os.getenv("SYSTEM_PROMPT", SYSTEM_PROMPT)
 
     def _load_providers(self):
         if key := os.getenv("GEMINI_API_KEY"):
@@ -182,7 +181,7 @@ class LLM:
         raise RuntimeError("OpenRouter unavailable")
 
 
-    def ask(self, text):
+    def ask(self, text, facts=[], messages={}):
 
         if not self.providers:
             return "No AI providers configured."

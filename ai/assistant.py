@@ -19,6 +19,7 @@ import requests
 from openwakeword.model import Model
 
 from llm import LLM
+from db import DbRequest, db_worker, db_queue
 
 import logging
 
@@ -72,12 +73,12 @@ def split_sentences(text):
 
 def sentence_pause(text):
     if text.endswith("?"):
-        return 0.8
+        return 1
 
     if text.endswith("!"):
-        return 0.6
+        return 0.9
 
-    return 0.5
+    return 0.7
 
 
 def callback(indata, frames, time_info, status):
@@ -316,15 +317,29 @@ def wait_for_service(name, url):
             logger.info(f"waiting for {name}...")
             time.sleep(5)
 
+def compose_prompt():
+    pass
+    # prompt = f"""
+    #     Recent conversation:
+    #     {conversation_text}
+
+    #     Child facts:
+    #     {facts_text}
+
+    #     Current question:
+    #     {text}
+    #     """
+
 def main():
 
     wait_for_service("stt", STT_SERVER)
     wait_for_service("tts", TTS_SERVER)
 
-    threading.Thread(target=tts_worker, daemon=True).start()
-    threading.Thread(target=audio_worker, daemon=True).start()
-    threading.Thread(target=wakeword_worker, daemon=True).start()
-    threading.Thread(target=record_worker, daemon=True).start()
+    threading.Thread(target=tts_worker, daemon=True, name="tts").start()
+    threading.Thread(target=audio_worker, daemon=True, name="audio").start()
+    threading.Thread(target=wakeword_worker, daemon=True, name="wakeword").start()
+    threading.Thread(target=record_worker, daemon=True, name="record").start()
+    #threading.Thread(target=db_worker, args=("assistant.db",), name="db").start()
 
     llm = LLM()
 
@@ -350,8 +365,8 @@ def main():
         greeting()
         tts_queue.join()
         audio_output_queue.join()
-        #while not audio_input_queue.empty():
-        #    audio_input_queue.get_nowait()
+        while not audio_input_queue.empty():
+            audio_input_queue.get_nowait()
         recording_event.set()
         recording_done.clear()
         recording_done.wait()
@@ -378,21 +393,13 @@ def main():
                 continue
 
             if text:
+                #facts = get_facts()
+                #mesages = get_messages(20)
+                facts = []
+                messages = {}
                 logger.info(f"Child: {text}")
                 try:
-                    # prompt = f"""
-                    #     {system_prompt}
-
-                    #     Recent conversation:
-                    #     {conversation_text}
-
-                    #     Child facts:
-                    #     {facts_text}
-
-                    #     Current question:
-                    #     {text}
-                    #     """
-                    response = llm.ask(text)
+                    response = llm.ask(text, facts, messages)
                     response = re.sub(r"^```json\s*", "", response.strip())
                     response = re.sub(r"\s*```$", "", response)
                     answer = response
@@ -401,9 +408,10 @@ def main():
                         data = json.loads(response)
                         if isinstance(data, dict):
                             answer = data.get("answer", "")
-                            memory = data.get("memory", [])
-                            logger.info(f"memory: {memory}")
-                            # update_memory(memory) TODO
+                            facts = data.get("facts", [])
+                            logger.info(f"facts: {facts}")
+                            #update_facts(facts)
+                            #update_messages(answer)
                     except Exception as e:
                         pass
                 except Exception as e:
@@ -421,6 +429,8 @@ def main():
         chunks.clear()
         logger.info("Returning to sleep...")
 
+    #db_queue.put(None)   # Tell worker to stop
+    #db_thread.join()     # Wait until it finishes
 
 if __name__ == "__main__":
     main()
