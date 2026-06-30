@@ -304,20 +304,6 @@ def transcribe(wav_buffer):
         logger.error(e)
 
 
-def wait_for_service(service):
-    while True:
-        try:
-            service.get(
-                "/health",
-                timeout=2,
-            )
-            response.raise_for_status()
-            logger.info(f"{name} ready")
-            return
-        except Exception:
-            logger.info(f"waiting for {service.name}...")
-            time.sleep(5)
-
 def compose_prompt():
     pass
     # prompt = f"""
@@ -333,11 +319,11 @@ def compose_prompt():
 
 def main():
 
-    stt = ServiceClient(STT_SERVER)
-    tts = ServiceClient(TTS_SERVER)
+    stt = Service("whisper", STT_SERVER)
+    tts = Service("kokoro", TTS_SERVER)
 
-    wait_for_service(stt)
-    wait_for_service(tts)
+    stt.wait_until_ready()
+    tts.wait_until_ready()
 
     threading.Thread(target=tts_worker, daemon=True, name="tts").start()
     threading.Thread(target=audio_worker, daemon=True, name="audio").start()

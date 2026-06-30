@@ -30,3 +30,8 @@ resource "google_service_account" "assistant" {
 resource "google_service_account_key" "assistant" {
   service_account_id = google_service_account.assistant.name
 }
+
+resource "local_file" "assistant_key" {
+  filename = "assistant.key.json"
+  content  = base64decode(google_service_account_key.assistant.private_key)
+}
