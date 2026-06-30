@@ -7,6 +7,10 @@ resource "google_cloud_run_v2_service" "whisper" {
     containers {
       image = "docker.io/${var.user}/whisper:latest"
 
+      env {
+        name  = "REVISION"
+        value = var.redeploy
+      }
       ports {
         container_port = 8080
       }
@@ -16,6 +20,7 @@ resource "google_cloud_run_v2_service" "whisper" {
           cpu    = "1"
           memory = "512Mi"
         }
+        cpu_idle = true
       }
     }
 

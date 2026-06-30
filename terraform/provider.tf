@@ -17,6 +17,10 @@ variable "region" {
   default = "asia-southeast1"
 }
 variable "user" {}
+variable "redeploy" {
+  type    = string
+  default = ""
+}
 
 resource "google_project_service" "run" {
   service = "run.googleapis.com"

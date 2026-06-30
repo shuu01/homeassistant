@@ -7,6 +7,11 @@ resource "google_cloud_run_v2_service" "kokoro" {
     containers {
       image = "docker.io/${var.user}/kokoro:latest"
 
+      env {
+        name  = "REVISION"
+        value = var.redeploy
+      }
+
       ports {
         container_port = 8080
       }
@@ -16,6 +21,7 @@ resource "google_cloud_run_v2_service" "kokoro" {
           cpu    = "2"
           memory = "1Gi"
         }
+        cpu_idle = true
       }
     }
 
