@@ -273,7 +273,7 @@ def greeting():
     audio_output_queue.put(audio)
 
 
-def transcribe(wav_buffer):
+def transcribe(stt, wav_buffer):
     try:
         files = {
             "file": (
@@ -377,7 +377,7 @@ def main():
             )
 
             try:
-                text = transcribe(wav_buffer)
+                text = transcribe(stt, wav_buffer)
             except Exception as e:
                 logger.error(f"STT failed: {e}")
                 continue
