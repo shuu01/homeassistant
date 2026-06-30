@@ -14,7 +14,7 @@ RUN git clone --depth=1 https://github.com/ggml-org/whisper.cpp.git .
 
 RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
-    -DGGML_NATIVE=ON \
+    -DGGML_NATIVE=OFF \
     -DBUILD_SHARED_LIBS=OFF
 
 RUN cmake --build build \

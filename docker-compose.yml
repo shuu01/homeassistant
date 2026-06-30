@@ -119,7 +119,7 @@ services:
     image: whisper:latest
     build:
       context: .
-      dockerfile: ./whisper.cpp/Dockerfile
+      dockerfile: ./whisper/Dockerfile
     container_name: whisper
     restart: unless-stopped
     ports:
