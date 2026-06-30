@@ -204,7 +204,7 @@ def wakeword_worker():
             wake_model.reset()
 
 
-def tts_worker():
+def tts_worker(tts):
     while True:
         text = tts_queue.get()
 
@@ -325,7 +325,7 @@ def main():
     stt.wait_until_ready()
     tts.wait_until_ready()
 
-    threading.Thread(target=tts_worker, daemon=True, name="tts").start()
+    threading.Thread(target=tts_worker, daemon=True, name="tts", args=(tts,)).start()
     threading.Thread(target=audio_worker, daemon=True, name="audio").start()
     threading.Thread(target=wakeword_worker, daemon=True, name="wakeword").start()
     threading.Thread(target=record_worker, daemon=True, name="record").start()
