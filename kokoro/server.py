@@ -9,6 +9,9 @@ from pydantic import BaseModel
 
 from kokoro_onnx import Kokoro
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 MODEL = "kokoro-v1.0.onnx"
 VOICES = "voices-v1.0.bin"
@@ -56,6 +59,10 @@ def synthesize(req: SynthesizeRequest):
         samples,
         sample_rate,
         format="WAV",
+    )
+
+    logger.info(
+        "Generated %.2f s of audio", len(samples) / sample_rate,
     )
 
     return Response(
