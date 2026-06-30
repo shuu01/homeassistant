@@ -83,4 +83,4 @@ jobs:
           context: .
           file: ./kokoro/Dockerfile
           push: true
-          tags: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/kokoro:latest
+          tags: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/kokoro:${GITHUB_SHA}
