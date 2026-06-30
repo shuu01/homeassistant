@@ -20,7 +20,7 @@ from openwakeword.model import Model
 
 from llm import LLM
 from db import DbRequest, db_worker, db_queue
-from client import ServiceClient
+from client import Service
 
 import logging
 
