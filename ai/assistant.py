@@ -304,7 +304,7 @@ def transcribe(wav_buffer):
         logger.error(e)
 
 
-def wait_for_service(name, service):
+def wait_for_service(service):
     while True:
         try:
             service.get(
@@ -315,7 +315,7 @@ def wait_for_service(name, service):
             logger.info(f"{name} ready")
             return
         except Exception:
-            logger.info(f"waiting for {name}...")
+            logger.info(f"waiting for {service.name}...")
             time.sleep(5)
 
 def compose_prompt():

@@ -4,10 +4,11 @@ from google.auth.transport.requests import Request
 from google.oauth2 import id_token
 
 class ServiceClient:
-    def __init__(self, base_url):
+    def __init__(self, base_url, name=""):
         self.base_url = base_url.rstrip("/")
         self._token = None
         self._expires = 0
+        self.name = name
 
         self.cloud_run = os.getenv("CLOUD_RUN") == "1"
 
