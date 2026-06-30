@@ -22,7 +22,7 @@ class Service:
         self._expires = 0
         self.name = name
 
-        self.cloud_run = os.getenv("CLOUD_RUN") == "1"
+        self.cloud_run = self.base_url.startswith("https://")
 
     def _headers(self):
         if not self.cloud_run:
