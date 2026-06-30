@@ -46,7 +46,8 @@ class Service:
                 response.raise_for_status()
                 logger.info(f"{self.name} ready")
                 return
-            except Exception:
+            except Exception as e:
+                logger.error(e)
                 logger.info(f"Waiting for {self.name}...")
                 time.sleep(5)
 
