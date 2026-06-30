@@ -20,6 +20,7 @@ from openwakeword.model import Model
 
 from llm import LLM
 from db import DbRequest, db_worker, db_queue
+from client import ServiceClient
 
 import logging
 
@@ -212,8 +213,8 @@ def tts_worker():
                 return
             logger.info(f"Assistant: {text}")
 
-            response = requests.post(
-                f"{TTS_SERVER}/synthesize",
+            response = tts.post(
+                "/synthesize",
                 json={
                     "text": text,
                     "voice": "af_heart",
@@ -282,8 +283,8 @@ def transcribe(wav_buffer):
             )
         }
 
-        response = requests.post(
-            f"{STT_SERVER}/inference",
+        response = stt.post(
+            "/inference",
             files=files,
             timeout=60,
         )
@@ -303,11 +304,11 @@ def transcribe(wav_buffer):
         logger.error(e)
 
 
-def wait_for_service(name, url):
+def wait_for_service(name, service):
     while True:
         try:
-            response = requests.get(
-                f"{url}/health",
+            service.get(
+                "/health",
                 timeout=2,
             )
             response.raise_for_status()
@@ -332,8 +333,11 @@ def compose_prompt():
 
 def main():
 
-    wait_for_service("stt", STT_SERVER)
-    wait_for_service("tts", TTS_SERVER)
+    stt = ServiceClient(STT_SERVER)
+    tts = ServiceClient(TTS_SERVER)
+
+    wait_for_service(stt)
+    wait_for_service(tts)
 
     threading.Thread(target=tts_worker, daemon=True, name="tts").start()
     threading.Thread(target=audio_worker, daemon=True, name="audio").start()
@@ -411,7 +415,7 @@ def main():
                             facts = data.get("facts", [])
                             logger.info(f"facts: {facts}")
                             #update_facts(facts)
-                            #update_messages(answer)
+                            #update_messages(text)
                     except Exception as e:
                         pass
                 except Exception as e:
