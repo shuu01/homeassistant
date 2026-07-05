@@ -19,7 +19,7 @@ import requests
 from openwakeword.model import Model
 
 from llm import LLM
-from db import DbRequest, db_worker, db_queue
+from db import DbRequest, db_worker, db_request
 from client import Service
 
 import logging
@@ -28,7 +28,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)s %(message)s",
+    format="%(asctime)s %(threadName)s %(levelname)s %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ VOLUME_THRESHOLD = int(os.getenv("VOLUME_THRESHOLD", "200"))
 MAX_RECORD_SECONDS = 20
 SILENCE_TIMEOUT_SECONDS = 3
 WAIT_FOR_SPEECH_TIMEOUT = 10
+LAST_MESSAGES = int(os.getenv("LAST_MESSAGES", "20"))
 
 STT_SERVER = os.getenv(
     "STT_SERVER",
@@ -205,6 +206,7 @@ def wakeword_worker():
 
 
 def tts_worker(tts):
+    speed = os.getenv("SPEACH_SPEED", 1)
     while True:
         text = tts_queue.get()
 
@@ -218,6 +220,7 @@ def tts_worker(tts):
                 json={
                     "text": text,
                     "voice": "af_heart",
+                    "speed": speed,
                 },
                 timeout=30,
             )
@@ -304,19 +307,6 @@ def transcribe(stt, wav_buffer):
         logger.error(e)
 
 
-def compose_prompt():
-    pass
-    # prompt = f"""
-    #     Recent conversation:
-    #     {conversation_text}
-
-    #     Child facts:
-    #     {facts_text}
-
-    #     Current question:
-    #     {text}
-    #     """
-
 def main():
 
     stt = Service("whisper", STT_SERVER)
@@ -329,7 +319,7 @@ def main():
     threading.Thread(target=audio_worker, daemon=True, name="audio").start()
     threading.Thread(target=wakeword_worker, daemon=True, name="wakeword").start()
     threading.Thread(target=record_worker, daemon=True, name="record").start()
-    #threading.Thread(target=db_worker, args=("assistant.db",), name="db").start()
+    threading.Thread(target=db_worker, args=("assistant.db",), name="db").start()
 
     llm = LLM()
 
@@ -377,33 +367,23 @@ def main():
             )
 
             try:
-                text = transcribe(stt, wav_buffer)
+                user_text = transcribe(stt, wav_buffer)
             except Exception as e:
                 logger.error(f"STT failed: {e}")
                 continue
 
-            if text:
+            if user_text:
                 #facts = get_facts()
-                #mesages = get_messages(20)
+                mesages = get_messages(LAST_MESSAGES)
                 facts = []
-                messages = {}
-                logger.info(f"Child: {text}")
                 try:
-                    response = llm.ask(text, facts, messages)
-                    response = re.sub(r"^```json\s*", "", response.strip())
-                    response = re.sub(r"\s*```$", "", response)
-                    answer = response
-                    logger.debug(answer)
-                    try:
-                        data = json.loads(response)
-                        if isinstance(data, dict):
-                            answer = data.get("answer", "")
-                            facts = data.get("facts", [])
-                            logger.info(f"facts: {facts}")
-                            #update_facts(facts)
-                            #update_messages(text)
-                    except Exception as e:
-                        pass
+                    response = llm.ask(user_text, facts, messages)
+                    answer = response.get('answer')
+                    facts = response.get('facts')
+                    logger.info(f"facts: {facts}")
+                    #update_facts(facts)
+                    update_messages("user", user_text)
+                    update_messages("assistant", answer)
                 except Exception as e:
                     logger.error(f"Answer failed {e}")
                     raise
@@ -419,8 +399,8 @@ def main():
         chunks.clear()
         logger.info("Returning to sleep...")
 
-    #db_queue.put(None)   # Tell worker to stop
-    #db_thread.join()     # Wait until it finishes
+    db_queue.put(None)   # Tell worker to stop
+    db_thread.join()     # Wait until it finishes
 
 if __name__ == "__main__":
     main()

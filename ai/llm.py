@@ -4,6 +4,7 @@ from openai import OpenAI
 
 import os
 import logging
+import json
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -34,34 +35,37 @@ Keep responses under 3 sentences unless it is a story or a longer answer is requ
 Never be scary.
 No emojis in responses.
 
+Rules for facts:
+- Store only long-term facts about the child.
+- Memories should be useful in future conversations.
+- Do not store temporary events.
+- The "facts" field is ONLY for facts that the child explicitly states about themselves.
+- If there is nothing worth remembering, return an empty array.
+- Never infer, assume, or guess.
+- Bad:
+  - ate pizza today
+  - is tired
+- Good:
+  - likes unicorns
+  - favorite color is purple
+  - has a pet rabbit named Snowball
+"""
+
+EXTRA_PROMPT = """
+Return JSON in this format:
+
+{
+  "answer": string,
+  "facts": string[]
+}
+
 Return ONLY valid JSON.
 Do not use markdown.
 Do not use code fences.
-
-At the end of your response, attach memory updates.
-Only store information that will likely remain true
-for weeks or months.
-Do not store temporary events.
-The "facts" field is ONLY for facts that the child explicitly states about themselves.
-Never infer, assume, or guess.
-Bad:
-- ate pizza today
-- is tired
-Good:
-- likes unicorns
-- favorite color is purple
-- has a pet rabbit named Snowball
-
 facts must be an array of strings.
 Never use objects.
 Never use booleans.
 Never use nested JSON.
-
-Response format:
-{
-  "answer": "...",
-  "facts": ["...", "..."]
-}
 """
 
 class LLM:
@@ -115,10 +119,25 @@ class LLM:
     def _ask_gemini(self, text):
 
         try:
-            return self.client.models.generate_content(
+            response = self.client.models.generate_content(
                 model=self.model,
-                contents=text
-            ).text.strip()
+                contents=text,
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": {
+                        "type": "object",
+                        "properties": {
+                            "answer": {"type": "string"},
+                            "facts": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": ["answer", "facts"],
+                    },
+                },
+            )
+            return json.loads(response.text)
 
         except Exception as e:
             logger.error(f"Gemini failed ({self.model}): {e}")
@@ -132,12 +151,13 @@ class LLM:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.system_prompt},
+                    {"role": "system", "content": f"{self.system_prompt}\n\n{EXTRA_PROMPT}"},
                     {"role": "user", "content": text}
-                ]
+                ],
+                response_format={"type": "json_object"},
             )
-
-            return response.choices[0].message.content.strip()
+            data = json.loads(response.choices[0].message.content.strip())
+            return data
 
         except Exception as e:
             logger.error(f"Groq failed ({self.model}): {e}")
@@ -152,9 +172,28 @@ class LLM:
                 model=self.model,
                 instructions=self.system_prompt,
                 input=text,
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "assistant_response",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "answer": {"type": "string"},
+                                "facts": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                            "required": ["answer", "facts"],
+                            "additionalProperties": False,
+                        },
+                    }
+                },
             )
 
-            return response.output_text.strip()
+            data = json.loads(response.choices[0].message.content.strip())
+            return data
 
         except Exception as e:
             logger.error(f"OpenAI failed ({self.model}): {e}")
@@ -168,25 +207,35 @@ class LLM:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.system_prompt},
+                    {"role": "system", "content": f"{self.system_prompt}\n\n{EXTRA_PROMPT}"},
                     {"role": "user", "content": text}
                 ]
             )
 
-            return response.choices[0].message.content.strip()
+            data = json.loads(response.choices[0].message.content.strip())
+            return data
 
         except Exception as e:
             logger.error(f"OpenRouter failed ({self.model}): {e}")
 
         raise RuntimeError("OpenRouter unavailable")
 
+    def compose_prompt(self, text, messages={}, facts=[]):
+        prompt = (
+            f"Recent conversation:\n{messages.join('\n')}\n"
+            f"Child facts:\n{facts.join('\n')}\n"
+            f"Current question:\nChild: {text}"
+        )
+        return prompt
 
-    def ask(self, text, facts=[], messages={}):
+
+    def ask(self, text, messages={}, facts=[]):
 
         if not self.providers:
             return "No AI providers configured."
 
-        prompt = f"Child: {text}"
+        prompt = self.compose_prompt(text, messages, facts)
+        logger.info(prompt)
 
         for offset in range(len(self.providers)):
 
@@ -200,9 +249,13 @@ class LLM:
                 self.model = provider.get("model")
                 result = provider.get("fn")(prompt)
                 self.current = idx
-                return result
+                logger.info(result)
+                if isinstance(result, dict):
+                    return json.loads(result)
+                else:
+                    return {"answer": result}
 
             except Exception as e:
-                logger.error(f"{provider.get("name")} failed: {e}")
+                logger.error(f"{provider.get('name')} failed: {e}")
 
-        return "Sorry, I'm not available right now."
+        return {"answer": "Sorry, I'm not available right now."}

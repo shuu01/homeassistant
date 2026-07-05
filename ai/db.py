@@ -5,8 +5,8 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 
-db_queue = queue.Queue()
-response = queue.Queue()
+db_request = queue.Queue()
+db_response = queue.Queue()
 
 @dataclass
 class DbRequest:
@@ -20,7 +20,7 @@ def db_worker(db_path):
     try:
         initialize_database(conn)
         while True:
-            request = db_queue.get()
+            request = db_request.get()
 
             if request is None:
                 break
@@ -53,21 +53,21 @@ def initialize_database(conn):
 
 
 def get_facts():
-    db_queue.put(
-        DbRequest("SELECT * FROM facts", fetch="all", response=response)
+    db_request.put(
+        DbRequest("SELECT * FROM facts", fetch="all", response=db_response)
     )
-    rows = response.get()
+    rows = db_response.get()
     return rows
 
 
 def update_facts(facts):
     for fact in facts:
-        db_queue.put(
+        db_request.put(
             DbRequest("INSERT INTO facts (fact) VALUES (?)", (fact,))
         )
 
 def get_messages(limit=20):
-    db_queue.put(
+    db_request.put(
         DbRequest(
             """
             select role, text from (
@@ -79,13 +79,13 @@ def get_messages(limit=20):
             """,
             (limit,),
             fetch="all",
-            response=response
+            response=db_response
         )
     )
-    rows = response.get()
+    rows = db_response.get()
     return rows
 
-def update_messages(text):
-    db_queue.put(
-        DbRequest("INSERT INTO facts(text) VALUES (?)", (text,))
+def update_messages(role, text):
+    db_request.put(
+        DbRequest("INSERT INTO messages(role, text) VALUES (?, ?)", (role, text,))
     )
