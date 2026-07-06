@@ -156,8 +156,10 @@ class LLM:
                 ],
                 response_format={"type": "json_object"},
             )
-            data = json.loads(response.choices[0].message.content.strip())
-            return data
+            data = response.choices[0].message.content.strip()
+            logger.debug(data)
+            json_data = json.loads(data)
+            return json_data
 
         except Exception as e:
             logger.error(f"Groq failed ({self.model}): {e}")
@@ -192,8 +194,10 @@ class LLM:
                 },
             )
 
-            data = json.loads(response.choices[0].message.content.strip())
-            return data
+            data = response.choices[0].message.content.strip()
+            logger.debug(data)
+            json_data = json.loads(data)
+            return json_data
 
         except Exception as e:
             logger.error(f"OpenAI failed ({self.model}): {e}")
@@ -211,9 +215,10 @@ class LLM:
                     {"role": "user", "content": text}
                 ]
             )
-
-            data = json.loads(response.choices[0].message.content.strip())
-            return data
+            data = response.choices[0].message.content.strip()
+            logger.debug(data)
+            json_data = json.loads(data)
+            return json_data
 
         except Exception as e:
             logger.error(f"OpenRouter failed ({self.model}): {e}")
@@ -249,7 +254,6 @@ class LLM:
                 self.model = provider.get("model")
                 result = provider.get("fn")(prompt)
                 self.current = idx
-                logger.info(result)
                 if isinstance(result, dict):
                     return result
                 else:
