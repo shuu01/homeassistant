@@ -19,8 +19,8 @@ import requests
 from openwakeword.model import Model
 
 from llm import LLM
-from db import DbRequest, db_worker, db_request
-from client import Service
+from db import DbRequest, db_worker, db_request, get_messages, update_messages
+from service import Service
 
 import logging
 
@@ -374,7 +374,7 @@ def main():
 
             if user_text:
                 #facts = get_facts()
-                mesages = get_messages(LAST_MESSAGES)
+                messages = get_messages(LAST_MESSAGES)
                 facts = []
                 try:
                     response = llm.ask(user_text, facts, messages)

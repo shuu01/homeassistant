@@ -220,7 +220,7 @@ class LLM:
 
         raise RuntimeError("OpenRouter unavailable")
 
-    def compose_prompt(self, text, messages={}, facts=[]):
+    def compose_prompt(self, text, messages=[], facts=[]):
         prompt = (
             f"Recent conversation:\n{messages.join('\n')}\n"
             f"Child facts:\n{facts.join('\n')}\n"
@@ -229,7 +229,7 @@ class LLM:
         return prompt
 
 
-    def ask(self, text, messages={}, facts=[]):
+    def ask(self, text, messages=[], facts=[]):
 
         if not self.providers:
             return "No AI providers configured."
