@@ -251,7 +251,7 @@ class LLM:
                 self.current = idx
                 logger.info(result)
                 if isinstance(result, dict):
-                    return json.loads(result)
+                    return result
                 else:
                     return {"answer": result}
 
