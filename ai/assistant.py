@@ -375,6 +375,7 @@ def main():
             if user_text:
                 #facts = get_facts()
                 messages = get_messages(LAST_MESSAGES)
+                logger.info(messages)
                 facts = []
                 try:
                     response = llm.ask(user_text, facts, messages)
@@ -385,7 +386,7 @@ def main():
                     update_messages("user", user_text)
                     update_messages("assistant", answer)
                 except Exception as e:
-                    logger.error(f"Answer failed {e}")
+                    logger.error(f"Answer failed: {e}")
                     raise
 
                 for sentence in split_sentences(answer):
