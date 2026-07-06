@@ -226,12 +226,16 @@ class LLM:
         raise RuntimeError("OpenRouter unavailable")
 
     def compose_prompt(self, text, messages=[], facts=[]):
-        prompt = (
-            f"Recent conversation:\n{'\n'.join(messages)}\n"
-            f"Child facts:\n{'\n'.join(facts)}\n"
-            f"Current question:\nChild: {text}"
+        history = "\n".join(
+            f"{role}: {text}"
+            for role, text in messages
         )
-        return prompt
+        prompt = [
+            f"Recent conversation:\n{history}" if history else None,
+            f"Child facts:\n{'\n'.join(facts)}" if facts else None,
+            f"Current question:\nChild: {text}"
+        ]
+        return "\n".join(line for line in prompt if line)
 
 
     def ask(self, text, messages=[], facts=[]):

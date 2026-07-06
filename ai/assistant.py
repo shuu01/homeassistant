@@ -375,7 +375,6 @@ def main():
             if user_text:
                 #facts = get_facts()
                 messages = get_messages(LAST_MESSAGES)
-                logger.info(messages)
                 facts = []
                 try:
                     response = llm.ask(user_text, facts, messages)
