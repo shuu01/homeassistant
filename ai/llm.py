@@ -222,8 +222,8 @@ class LLM:
 
     def compose_prompt(self, text, messages=[], facts=[]):
         prompt = (
-            f"Recent conversation:\n{messages.join('\n')}\n"
-            f"Child facts:\n{facts.join('\n')}\n"
+            f"Recent conversation:\n{'\n'.join(messages)}\n"
+            f"Child facts:\n{'\n'.join(facts)}\n"
             f"Current question:\nChild: {text}"
         )
         return prompt
