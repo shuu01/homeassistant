@@ -7,8 +7,8 @@ import requests
 class GistStorage:
 
     def __init__(self):
-        self.token = os.getenv["GITHUB_TOKEN"]
-        self.gist_id = os.getenv["GIST_ID"]
+        self.token = os.getenv("GITHUB_TOKEN")
+        self.gist_id = os.getenv("GIST_ID")
 
         self.url = f"https://api.github.com/gists/{self.gist_id}"
 
