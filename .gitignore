@@ -6,3 +6,4 @@
 *.tfvars.json
 *.key.json
 greetings
+.DS_Store
