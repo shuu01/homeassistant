@@ -1,22 +1,39 @@
-# Voice assistant architecture
+## Voice assistant architecture
 
-Microphone
-     │
-     ▼
- Wake Word
-     │
-     ▼
- Recording
-     │
-     ▼
-     AI ───────────────┐
-     │                 │
-     ▼                 ▼
- Memory           Conversation
-     │                 │
-     └────────┬────────┘
-              ▼
-             TTS
-              │
-              ▼
-           Speaker
+```text
++------------+
+| Microphone |
++------------+
+      |
+      v
++------------+
+| Wake Word  |
++------------+
+      |
+      v
++------------+
+| Recording  |
++------------+
+      |
+      v
++------------+
+|     AI     |
++------------+
+      |
+  +---+---+
+  |       |
+  v       v
+Memory  Conversation
+  |       |
+  +---+---+
+      |
+      v
++------------+
+|    TTS     |
++------------+
+      |
+      v
++------------+
+|  Speaker   |
++------------+
+```
