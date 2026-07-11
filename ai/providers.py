@@ -349,6 +349,18 @@ class GeminiProvider(Provider):
 
             return _pcm_to_wav(audio)
 
+        except ResourceExhausted:
+            self.disable("llm", RATE_LIMIT_DISABLE)
+            raise
+
+        except (TooManyRequests, ServiceUnavailable):
+            self.disable("llm", CONNECTION_DISABLE)
+            raise
+
+        except DeadlineExceeded:
+            self.disable("llm", TIMEOUT_DISABLE)
+            raise
+
         except Exception as e:
             logger.error(
                 "Gemini TTS (%s) failed: %s",
@@ -446,6 +458,18 @@ class GroqProvider(Provider):
 
             return response.read()
 
+        except groq.RateLimitError:
+            self.disable("llm", RATE_LIMIT_DISABLE)
+            raise
+
+        except (
+            groq.APIConnectionError,
+            groq.APITimeoutError,
+            groq.InternalServerError,
+        ):
+            self.disable("llm", CONNECTION_DISABLE)
+            raise
+
         except Exception as e:
             logger.error(
                 "Groq TTS (%s) failed: %s",
@@ -466,6 +490,18 @@ class GroqProvider(Provider):
             )
 
             return response.strip()
+
+        except groq.RateLimitError:
+            self.disable("llm", RATE_LIMIT_DISABLE)
+            raise
+
+        except (
+            groq.APIConnectionError,
+            groq.APITimeoutError,
+            groq.InternalServerError,
+        ):
+            self.disable("llm", CONNECTION_DISABLE)
+            raise
 
         except Exception as e:
             logger.error(
