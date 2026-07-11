@@ -3,6 +3,7 @@ from providers import (
     GroqProvider,
     OpenAIProvider,
     OpenRouterProvider,
+    LocalProvider,
 )
 from logger import logger
 
@@ -16,6 +17,13 @@ class AI:
         self.openai = OpenAIProvider()
         self.openrouter = OpenRouterProvider()
 
+        self.providers = [
+            self.local,
+            self.gemini,
+            self.groq,
+            self.openai,
+            self.openrouter,
+        ]
 
         self.llm = [
             self.gemini,
