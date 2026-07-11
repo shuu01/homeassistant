@@ -378,8 +378,8 @@ class GroqProvider(Provider):
         super().__init__()
 
         self.name = "groq"
-
-        if not key:= os.getenv(self.ENV):
+        key= os.getenv(self.ENV)
+        if not key:
             logger.info("Groq disabled (%s not set)", self.ENV)
             return
         else:
@@ -520,7 +520,8 @@ class OpenAIProvider(Provider):
         super().__init__()
 
         self.name = "openai"
-        if not key:= os.getenv(self.ENV):
+        key = os.getenv(self.ENV)
+        if not key:
             logger.info("OpenAI disabled (%s not set)", self.ENV)
             return
         else:
@@ -613,7 +614,8 @@ class OpenRouterProvider(Provider):
         super().__init__()
 
         self.name = "openrouter"
-        if not key:= os.getenv(self.ENV):
+        key= os.getenv(self.ENV)
+        if not key:
             logger.info("OpenRouter disabled (%s not set)", self.ENV)
             return
         else:
