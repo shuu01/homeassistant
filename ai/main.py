@@ -1,7 +1,6 @@
 import io
 import os
 import time
-import json
 import re
 import random
 import threading
@@ -13,25 +12,14 @@ from queue import Queue, Full
 from pathlib import Path
 from scipy.io.wavfile import write
 from scipy.signal import resample_poly
-from dataclasses import dataclass
 
-import requests
 from openwakeword.model import Model
 
-from llm import LLM
-from db import DbRequest, db_worker, db_request, get_messages, update_messages
-from service import Service
-
-import logging
-
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(threadName)s %(levelname)s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+from ai import AI
+from storage import GistStorage
+from memory import Memory
+from conversation import Conversation
+from logger import logger
 
 GREETINGS_DIR = Path(os.getenv("GREETINGS_DIR", "./"))
 GREETINGS = list(GREETINGS_DIR.glob("*.wav"))
@@ -48,15 +36,6 @@ SILENCE_TIMEOUT_SECONDS = 3
 WAIT_FOR_SPEECH_TIMEOUT = 10
 LAST_MESSAGES = int(os.getenv("LAST_MESSAGES", "20"))
 
-STT_SERVER = os.getenv(
-    "STT_SERVER",
-    "http://whisper:8080",
-)
-TTS_SERVER = os.getenv(
-    "TTS_SERVER",
-    "http://kokoro:8080",
-)
-
 chunks = []
 
 tts_queue = Queue()
@@ -69,8 +48,41 @@ recording_event = threading.Event()
 recording_done = threading.Event()
 
 
+def compose_prompt(text, messages=None, facts=None):
+
+    sections = []
+
+    if messages:
+
+        messages_text = "\n".join(
+            f'{m["role"]}: {m["text"]}'
+            for m in messages
+        )
+
+        sections.append(
+            f"Recent conversation:\n{messages_text}"
+        )
+
+    if facts:
+
+        facts_text = "\n".join(
+            f"{key}: {value}"
+            for key, value in facts.items()
+        )
+
+        sections.append(
+            f"Child facts:\n{facts_text}"
+        )
+
+    sections.append(
+        f"Current question:\nChild: {text}"
+    )
+
+    return "\n".join(sections)
+
+
 def split_sentences(text):
-    return re.split(r'(?<=[.!?])\s+', text.strip())
+    return re.split(r'(?<=[.!?]["\']?)\s*', text.strip())
 
 
 def sentence_pause(text):
@@ -111,6 +123,8 @@ def record_worker():
 
     while True:
         audio = audio_input_queue.get()
+        if audio is None:
+            return
         if not recording_event.is_set():
             continue
 
@@ -176,6 +190,8 @@ def wakeword_worker():
     while True:
 
         audio = wakeword_queue.get()
+        if audio is None:
+            return
 
         if recording_event.is_set():
             continue
@@ -205,8 +221,8 @@ def wakeword_worker():
             wake_model.reset()
 
 
-def tts_worker(tts):
-    speed = os.getenv("SPEACH_SPEED", 1)
+def tts_worker(ai):
+    speed = float(os.getenv("SPEECH_SPEED", "1.0"))
     while True:
         text = tts_queue.get()
 
@@ -215,20 +231,10 @@ def tts_worker(tts):
                 return
             logger.info(f"Assistant: {text}")
 
-            response = tts.post(
-                "/synthesize",
-                json={
-                    "text": text,
-                    "voice": "af_heart",
-                    "speed": speed,
-                },
-                timeout=30,
-            )
-
-            response.raise_for_status()
+            content = ai.synthesize(text, speed)
 
             audio, sample_rate = sf.read(
-                io.BytesIO(response.content),
+                io.BytesIO(content),
                 dtype="float32",
             )
 
@@ -276,52 +282,17 @@ def greeting():
     audio_output_queue.put(audio)
 
 
-def transcribe(stt, wav_buffer):
-    try:
-        files = {
-            "file": (
-                "audio.wav",
-                wav_buffer,
-                "audio/wav",
-            )
-        }
-
-        response = stt.post(
-            "/inference",
-            files=files,
-            timeout=60,
-        )
-
-        response.raise_for_status()
-        data = response.json()
-        text = data.get("text", "").strip()
-        # filter gibberish
-        if re.fullmatch(r"\([^)]*\)", text):
-            return ""
-        if re.fullmatch(r"\[[^\]]*\]", text):
-            return ""
-        if len(text) < 3:
-            return ""
-        return text
-    except Exception as e:
-        logger.error(e)
-
-
 def main():
 
-    stt = Service("whisper", STT_SERVER)
-    tts = Service("kokoro", TTS_SERVER)
+    ai = AI()
+    storage = GistStorage()
+    memory = Memory(storage)
+    conversation = Conversation(storage)
 
-    stt.wait_until_ready()
-    tts.wait_until_ready()
-
-    threading.Thread(target=tts_worker, daemon=True, name="tts", args=(tts,)).start()
+    threading.Thread(target=tts_worker, daemon=True, name="tts", args=(ai,)).start()
     threading.Thread(target=audio_worker, daemon=True, name="audio").start()
     threading.Thread(target=wakeword_worker, daemon=True, name="wakeword").start()
     threading.Thread(target=record_worker, daemon=True, name="record").start()
-    threading.Thread(target=db_worker, args=("assistant.db",), name="db").start()
-
-    llm = LLM()
 
     stream = sd.InputStream(
         device=INPUT_DEVICE,
@@ -336,71 +307,88 @@ def main():
 
     stream.start()
     logger.info("Listening for wake word...")
+    try:
+        while True:
 
-    while True:
+            wake_event.clear()
+            wake_event.wait()
+            while not audio_input_queue.empty():
+                audio_input_queue.get_nowait()
 
-        wake_event.clear()
-        wake_event.wait()
+            greeting()
+            tts_queue.join()
+            audio_output_queue.join()
 
-        greeting()
-        tts_queue.join()
-        audio_output_queue.join()
-        while not audio_input_queue.empty():
-            audio_input_queue.get_nowait()
-        recording_event.set()
-        recording_done.clear()
-        recording_done.wait()
+            recording_event.set()
+            recording_done.clear()
+            recording_done.wait()
 
-        if not chunks:
-            logger.info("No speech captured")
-            continue
-
-        try:
-            wav_buffer = io.BytesIO()
-            write(wav_buffer, RATE, np.concatenate(chunks, axis=0))
-            wav_buffer.seek(0)
-
-            sf.write(
-                "/tmp/debug.wav",
-                np.concatenate(chunks),
-                RATE,
-            )
-
-            try:
-                user_text = transcribe(stt, wav_buffer)
-            except Exception as e:
-                logger.error(f"STT failed: {e}")
+            if not chunks:
+                logger.info("No speech captured")
                 continue
 
-            if user_text:
-                #facts = get_facts()
-                messages = get_messages(LAST_MESSAGES)
-                facts = []
+            try:
+                wav_buffer = io.BytesIO()
+                write(wav_buffer, RATE, np.concatenate(chunks, axis=0))
+                wav_buffer.seek(0)
+
+                sf.write(
+                    "/tmp/debug.wav",
+                    np.concatenate(chunks),
+                    RATE,
+                )
+
                 try:
-                    response = llm.ask(user_text, facts, messages)
-                    answer = response.get('answer')
-                    facts = response.get('facts')
-                    logger.info(f"facts: {facts}")
-                    #update_facts(facts)
-                    update_messages("user", user_text)
-                    update_messages("assistant", answer)
+                    user_text = ai.transcribe(wav_buffer)
                 except Exception as e:
-                    logger.error(f"Answer failed: {e}")
-                    raise
+                    logger.error(f"STT failed: {e}")
+                    continue
 
-                for sentence in split_sentences(answer):
-                    if sentence.strip():
-                        tts_queue.put(sentence)
+                if user_text:
+                    facts = memory.facts
+                    messages = conversation.messages
+                    prompt = compose_prompt(user_text, messages, facts)
+                    try:
+                        response = ai.ask(prompt)
+                        answer = response.get('answer')
+                        new_facts = response.get('facts')
+                        conversation.add("child", user_text)
+                        conversation.add("assistant", answer)
+                        memory.update(new_facts)
+                        logger.info(f"facts: {facts}")
+                    except Exception as e:
+                        logger.error(f"Answer failed: {e}")
+                        raise
 
-        except Exception as e:
-            logger.error(e)
+                    for sentence in split_sentences(answer):
+                        if sentence.strip():
+                            tts_queue.put(sentence)
+
+            except Exception as e:
+                logger.error(e)
+
         tts_queue.join()
         audio_output_queue.join()
         chunks.clear()
         logger.info("Returning to sleep...")
 
-    db_queue.put(None)   # Tell worker to stop
-    db_thread.join()     # Wait until it finishes
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+
+    finally:
+        stream.stop()
+        stream.close()
+        #tts.stop()
+        memory.stop()
+        conversation.stop()
+        ai.stop()
+
+        wakeword_queue.put(None)
+        audio_input_queue.put(None)
+        audio_output_queue.put(None)
+        tts_queue.put(None)
+        logger.info("Shutdown complete.")
+
 
 if __name__ == "__main__":
     main()

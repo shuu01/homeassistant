@@ -11,4 +11,4 @@ WORKDIR /app
 COPY ai/requirements.txt .
 RUN pip install --upgrade --no-cache-dir -r requirements.txt
 COPY ai/ .
-CMD ["python", "assistant.py"]
+CMD ["python", "main.py"]
