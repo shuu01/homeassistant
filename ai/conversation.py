@@ -34,14 +34,10 @@ class Conversation:
             messages = self.storage.load_json(self.filename)
             self.messages.extend(messages)
 
-            logger.info(
-                "Loaded %d messages.",
-                len(self.messages),
-            )
+            logger.info(f"Loaded {len(self.messages)} messages.")
         except Exception as e:
             logger.warning(
-                "Unable to load conversation: %s",
-                e,
+                f"Failed to load messages: {e}"
             )
 
     def _worker(self):

@@ -68,9 +68,7 @@ class AI:
 
             except Exception as e:
                 logger.exception(
-                    "%s %s failed",
-                    provider.name,
-                    capability,
+                    f"{provider.name} {capability} failed",
                 )
                 last_error = e
 

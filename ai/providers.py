@@ -31,6 +31,7 @@ class Model:
 
     configured: bool = False
     healthy: bool = True
+    health_counter: int = 0
 
     disabled_until: datetime | None = None
     timeout: int = 10
@@ -80,10 +81,8 @@ class Provider:
         )
 
         logger.warning(
-            "%s %s disabled until %s",
-            self.name,
-            capability,
-            model.disabled_until.isoformat(timespec="seconds"),
+            f"{self.name} {capability} disabled until "
+            f"{model.disabled_until.isoformat(timespec='seconds')}",
         )
 
     def ask(self, prompt):
@@ -132,6 +131,7 @@ class LocalProvider(Provider):
             self._check("tts")
             self._check("stt")
 
+
     def _check(self, capability):
 
         model = self.models[capability]
@@ -144,20 +144,27 @@ class LocalProvider(Provider):
                 f"{model.url}/health",
                 timeout=3,
             )
-
-            healthy = response.ok
-
+            ok = response.ok
         except Exception:
-            healthy = False
+            ok = False
 
-        if healthy != model.healthy:
+        if ok:
+            if model.healthy:
+                model.health_counter = 0
+                return
 
-            model.healthy = healthy
+            model.health_counter += 1
 
-            if healthy:
-                logger.info("%s is online", model.name)
-            else:
-                logger.warning("%s is offline", model.name)
+            if model.health_counter >= 3:
+                model.healthy = True
+                model.health_counter = 0
+                logger.info(f"{model.name} is online")
+
+        else:
+            model.health_counter = 0
+            if model.healthy:
+                model.healthy = False
+                logger.warning(f"{model.name} is offline")
 
     def stop(self):
 
@@ -235,7 +242,7 @@ class GeminiProvider(Provider):
         key = os.getenv(self.ENV)
 
         if not key:
-            logger.info("Gemini disabled (%s not set)", self.ENV)
+            logger.info(f"Gemini disabled ({self.ENV} not set)")
             return
 
         self.client = genai.Client(api_key=key)
@@ -319,9 +326,7 @@ class GeminiProvider(Provider):
 
         except Exception as e:
             logger.error(
-                "Gemini (%s) failed: %s",
-                model.name,
-                e,
+                f"Gemini ({model.name}) failed: {e}"
             )
             raise
 
@@ -363,9 +368,7 @@ class GeminiProvider(Provider):
 
         except Exception as e:
             logger.error(
-                "Gemini TTS (%s) failed: %s",
-                model.name,
-                e,
+                f"Gemini TTS ({model.name}) failed: {e}"
             )
             raise
 
@@ -380,7 +383,7 @@ class GroqProvider(Provider):
         self.name = "groq"
         key= os.getenv(self.ENV)
         if not key:
-            logger.info("Groq disabled (%s not set)", self.ENV)
+            logger.info(f"Groq disabled ({self.ENV} not set)")
             return
         else:
             self.client = Groq(api_key=key)
@@ -434,9 +437,7 @@ class GroqProvider(Provider):
 
         except Exception as e:
             logger.error(
-                "Groq LLM (%s) failed: %s",
-                model.name,
-                e,
+                f"Groq LLM ({model.name}) failed: {e}"
             )
             raise
 
@@ -472,9 +473,7 @@ class GroqProvider(Provider):
 
         except Exception as e:
             logger.error(
-                "Groq TTS (%s) failed: %s",
-                model.name,
-                e,
+                f"Groq TTS ({model.name}) failed: {e}"
             )
             raise
 
@@ -505,9 +504,7 @@ class GroqProvider(Provider):
 
         except Exception as e:
             logger.error(
-                "Groq STT (%s) failed: %s",
-                model.name,
-                e,
+                f"Groq STT ({model.name}) failed: {e}"
             )
             raise
 
@@ -522,7 +519,7 @@ class OpenAIProvider(Provider):
         self.name = "openai"
         key = os.getenv(self.ENV)
         if not key:
-            logger.info("OpenAI disabled (%s not set)", self.ENV)
+            logger.info(f"OpenAI disabled ({self.ENV} not set)")
             return
         else:
             self.client = OpenAI(api_key=key)
@@ -599,9 +596,7 @@ class OpenAIProvider(Provider):
 
         except Exception as e:
             logger.error(
-                "OpenAI LLM (%s) failed: %s",
-                model.name,
-                e,
+                f"OpenAI LLM ({model.name}) failed: {e}"
             )
             raise
 
@@ -616,7 +611,7 @@ class OpenRouterProvider(Provider):
         self.name = "openrouter"
         key= os.getenv(self.ENV)
         if not key:
-            logger.info("OpenRouter disabled (%s not set)", self.ENV)
+            logger.info(f"OpenRouter disabled ({self.ENV} not set)")
             return
         else:
             self.client = OpenAI(
@@ -669,9 +664,7 @@ class OpenRouterProvider(Provider):
 
         except Exception as e:
             logger.error(
-                "OpenRouter LLM (%s) failed: %s",
-                model.name,
-                e,
+                f"OpenRouter LLM ({model.name}) failed: {e}"
             )
             raise
 
