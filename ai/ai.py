@@ -25,7 +25,7 @@ class AI:
             self.openrouter,
         ]
         logger.info(f"Enabled providers:")
-        for provider in providers:
+        for provider in self.providers:
             logger.info(f"  - {provider.name}")
 
         self.llm = [
