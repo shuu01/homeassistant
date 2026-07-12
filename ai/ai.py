@@ -89,13 +89,13 @@ class AI:
             text,
         )
 
-    def synthesize(self, text, voice=None, speed=1.0):
+    def synthesize(self, text, speed=1.0, voice=None):
         return self._run(
             "tts",
             self.tts,
             text,
-            voice=voice,
             speed=speed,
+            voice=voice,
         )
 
     def transcribe(self, audio):

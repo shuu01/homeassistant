@@ -237,7 +237,7 @@ def tts_worker(ai, fallbacks):
                 return
             logger.info(f"Assistant: {text}")
 
-            content = ai.synthesize(text, speed)
+            content = ai.synthesize(text, speed=speed)
 
             audio, sample_rate = sf.read(
                 io.BytesIO(content),

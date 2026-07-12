@@ -431,14 +431,14 @@ class GroqProvider(Provider):
 
             return response.read()
 
-        except groq.RateLimitError:
+        except Groq.RateLimitError:
             self.disable("llm", RATE_LIMIT_DISABLE)
             raise
 
         except (
-            groq.APIConnectionError,
-            groq.APITimeoutError,
-            groq.InternalServerError,
+            Groq.APIConnectionError,
+            Groq.APITimeoutError,
+            Groq.InternalServerError,
         ):
             self.disable("llm", CONNECTION_DISABLE)
             raise
@@ -462,14 +462,14 @@ class GroqProvider(Provider):
 
             return response.strip()
 
-        except groq.RateLimitError:
+        except Groq.RateLimitError:
             self.disable("llm", RATE_LIMIT_DISABLE)
             raise
 
         except (
-            groq.APIConnectionError,
-            groq.APITimeoutError,
-            groq.InternalServerError,
+            Groq.APIConnectionError,
+            Groq.APITimeoutError,
+            Groq.InternalServerError,
         ):
             self.disable("llm", CONNECTION_DISABLE)
             raise
@@ -554,14 +554,14 @@ class OpenAIProvider(Provider):
             json_data = json.loads(data)
             return json_data
 
-        except openai.RateLimitError:
+        except Openai.RateLimitError:
             self.disable("llm", RATE_LIMIT_DISABLE)
             raise
 
         except (
-            openai.APIConnectionError,
-            openai.APITimeoutError,
-            openai.InternalServerError,
+            Openai.APIConnectionError,
+            Openai.APITimeoutError,
+            Openai.InternalServerError,
         ):
             self.disable("llm", CONNECTION_DISABLE)
             raise
@@ -622,14 +622,14 @@ class OpenRouterProvider(Provider):
             json_data = json.loads(data)
             return json_data
 
-        except openai.RateLimitError:
+        except Openai.RateLimitError:
             self.disable("llm", RATE_LIMIT_DISABLE)
             raise
 
         except (
-            openai.APIConnectionError,
-            openai.APITimeoutError,
-            openai.InternalServerError,
+            Openai.APIConnectionError,
+            Openai.APITimeoutError,
+            Openai.InternalServerError,
         ):
             self.disable("llm", CONNECTION_DISABLE)
             raise
