@@ -90,12 +90,15 @@ class AI:
         )
 
     def synthesize(self, text, speed=1.0, voice=None):
+        kwargs = {"speed": speed}
+        if voice is not None:
+            kwargs["voice"] = voice
+
         return self._run(
             "tts",
             self.tts,
             text,
-            speed=speed,
-            voice=voice,
+            **kwargs,
         )
 
     def transcribe(self, audio):
