@@ -300,7 +300,7 @@ class GeminiProvider(Provider):
             )
             raise
 
-    def synthesize(self, text, speed, voice="Kore"):
+    def synthesize(self, text, speed=1.0, voice="Kore"):
 
         model = self.models["tts"]
 
@@ -414,6 +414,7 @@ class GroqProvider(Provider):
     def synthesize(
         self,
         text,
+        speed=1.0,
         voice="hannah",
     ):
 
@@ -425,6 +426,7 @@ class GroqProvider(Provider):
                 voice=voice,
                 input=text,
                 response_format="wav",
+                speed=speed,
             )
 
             return response.read()

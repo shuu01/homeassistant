@@ -257,8 +257,9 @@ def tts_worker(ai, fallbacks):
 
         except Exception as e:
             logger.error(f"TTS failed: {e}")
-            tts_failed.set()
-            play(fallbacks)
+            if not tts_failed.is_set():
+                tts_failed.set()
+                play(fallbacks)
         finally:
             tts_queue.task_done()
 
@@ -387,8 +388,6 @@ def main():
                     tts_failed.clear()
                     for sentence in split_sentences(answer):
                         if sentence.strip():
-                            if tts_failed.is_set():
-                                break
                             tts_queue.put(sentence)
 
             except Exception as e:
