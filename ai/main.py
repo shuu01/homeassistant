@@ -83,7 +83,12 @@ def compose_prompt(text, messages=None, facts=None):
 
 
 def split_sentences(text):
-    return re.split(r'(?<=[.!?]["\']?)\s*', text.strip())
+    text = text.replace('"', '').replace("'", "")
+    return [
+        sentence.strip()
+        for sentence in re.findall(r'[^.!?]+[.!?]?', text)
+        if sentence.strip()
+    ]
 
 
 def sentence_pause(text):

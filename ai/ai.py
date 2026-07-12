@@ -24,6 +24,9 @@ class AI:
             self.openai,
             self.openrouter,
         ]
+        logger.info(f"Enabled providers:")
+        for provider in providers:
+            logger.info(f"  - {provider.name}")
 
         self.llm = [
             self.gemini,
