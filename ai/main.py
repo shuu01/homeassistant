@@ -21,8 +21,8 @@ from memory import Memory
 from conversation import Conversation
 from logger import logger
 
-GREETINGS_DIR = Path(os.getenv("GREETINGS_DIR", "./"))
-GREETINGS = list(GREETINGS_DIR.glob("*.wav"))
+GREETINGS_DIR = Path(os.getenv("GREETINGS_DIR", "./greetings"))
+FALLBACKS_DIR = Path(os.getenv("FALLBACKS_DIR", "./fallbacks"))
 
 MIC_RATE = 44100
 OUTPUT_RATE = 48000
@@ -46,6 +46,7 @@ speaking_event = threading.Event()
 wake_event = threading.Event()
 recording_event = threading.Event()
 recording_done = threading.Event()
+tts_failed = threading.Event()
 
 
 def compose_prompt(text, messages=None, facts=None):
@@ -221,7 +222,7 @@ def wakeword_worker():
             wake_model.reset()
 
 
-def tts_worker(ai):
+def tts_worker(ai, fallbacks):
     speed = float(os.getenv("SPEECH_SPEED", "1.0"))
     while True:
         text = tts_queue.get()
@@ -251,6 +252,8 @@ def tts_worker(ai):
 
         except Exception as e:
             logger.error(f"TTS failed: {e}")
+            tts_failed.set()
+            play(fallbacks)
         finally:
             tts_queue.task_done()
 
@@ -268,28 +271,42 @@ def audio_worker():
         speaking_event.clear()
 
 
-def greeting():
-    if not GREETINGS:
-        logger.warning("No greeting samples found")
-        tts_queue.put(
-            "Hi! What would you like to talk about?"
-        )
-        return
-    filename = random.choice(GREETINGS)
+def play(files):
+    filename = random.choice(files)
     audio, sample_rate = sf.read(filename, dtype="float32")
     if sample_rate != OUTPUT_RATE:
         audio = resample_poly(audio, OUTPUT_RATE, sample_rate)
     audio_output_queue.put(audio)
+    audio_output_queue.join()
+
+
+def load_wav_files(path):
+    if not path.exists():
+        raise RuntimeError(
+            f"{path} directory does not exist"
+        )
+
+    files = list(path.glob("*.wav"))
+
+    if not files:
+        raise RuntimeError(
+            f"No WAV files found in {path}"
+        )
+    return files
 
 
 def main():
+
+    greetings = load_wav_files(GREETINGS_DIR)
+    fallbacks = load_wav_files(FALLBACKS_DIR)
 
     ai = AI()
     storage = GistStorage()
     memory = Memory(storage)
     conversation = Conversation(storage)
+    #speaker = Speaker(ai, speaking_event)
 
-    threading.Thread(target=tts_worker, daemon=True, name="tts", args=(ai,)).start()
+    threading.Thread(target=tts_worker, daemon=True, name="tts", args=(ai, fallbacks)).start()
     threading.Thread(target=audio_worker, daemon=True, name="audio").start()
     threading.Thread(target=wakeword_worker, daemon=True, name="wakeword").start()
     threading.Thread(target=record_worker, daemon=True, name="record").start()
@@ -314,10 +331,10 @@ def main():
             wake_event.wait()
             while not audio_input_queue.empty():
                 audio_input_queue.get_nowait()
+            while not wakeword_queue.empty():
+                wakeword_queue.get_nowait()
 
-            greeting()
-            tts_queue.join()
-            audio_output_queue.join()
+            play(greetings)
 
             recording_event.set()
             recording_done.clear()
@@ -342,6 +359,7 @@ def main():
                     user_text = ai.transcribe(wav_buffer)
                 except Exception as e:
                     logger.error(f"STT failed: {e}")
+                    play(fallbacks)
                     continue
 
                 if user_text:
@@ -355,22 +373,26 @@ def main():
                         conversation.add("child", user_text)
                         conversation.add("assistant", answer)
                         memory.update(new_facts)
-                        logger.info(f"facts: {facts}")
+                        logger.info(f"facts: {new_facts}")
                     except Exception as e:
                         logger.error(f"Answer failed: {e}")
-                        raise
+                        play(fallbacks)
+                        continue
 
+                    tts_failed.clear()
                     for sentence in split_sentences(answer):
                         if sentence.strip():
+                            if tts_failed.is_set():
+                                break
                             tts_queue.put(sentence)
 
             except Exception as e:
                 logger.error(e)
 
-        tts_queue.join()
-        audio_output_queue.join()
-        chunks.clear()
-        logger.info("Returning to sleep...")
+            tts_queue.join()
+            audio_output_queue.join()
+            chunks.clear()
+            logger.info("Returning to sleep...")
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")
@@ -378,7 +400,6 @@ def main():
     finally:
         stream.stop()
         stream.close()
-        #tts.stop()
         memory.stop()
         conversation.stop()
         ai.stop()

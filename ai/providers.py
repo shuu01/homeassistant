@@ -89,7 +89,7 @@ class Provider:
         raise NotImplementedError
     def transcribe(self, audio):
         raise NotImplementedError
-    def synthesize(self, text):
+    def synthesize(self, text, speed=1.0, voice=None):
         raise NotImplementedError
     def stop(self):
         pass
@@ -210,8 +210,8 @@ class LocalProvider(Provider):
     def synthesize(
         self,
         text,
-        voice="af_heart",
         speed=1.0,
+        voice="af_heart"
     ):
         model = self.models["tts"]
         if not model.configured:
@@ -276,38 +276,8 @@ class GeminiProvider(Provider):
         try:
             response = self.client.models.generate_content(
                 model=model.name,
-                contents=f"{SYSTEM_PROMPT}\n\n{text}",
-                config={
-                    "response_mime_type": "application/json",
-                    "response_schema": {
-                        "type": "object",
-                        "properties": {
-                            "answer": {
-                                "type": "string",
-                            },
-                            "facts": {
-                                "type": "object",
-                                "additionalProperties": {
-                                    "anyOf": [
-                                        {
-                                            "type": "string",
-                                        },
-                                        {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "string",
-                                            },
-                                        },
-                                    ],
-                                },
-                            },
-                        },
-                        "required": [
-                            "answer",
-                            "facts",
-                        ],
-                    },
-                },
+                contents=f"{SYSTEM_PROMPT}\n{EXTRA_PROMPT}\n{text}",
+                config={"response_mime_type": "application/json"},
             )
 
             return json.loads(response.text)
@@ -330,7 +300,7 @@ class GeminiProvider(Provider):
             )
             raise
 
-    def synthesize(self, text):
+    def synthesize(self, text, speed, voice="Kore"):
 
         model = self.models["tts"]
 
@@ -343,7 +313,7 @@ class GeminiProvider(Provider):
                     speech_config=types.SpeechConfig(
                         voice_config=types.VoiceConfig(
                             prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                voice_name="Kore",
+                                voice_name=voice,
                             )
                         )
                     ),
