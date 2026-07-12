@@ -322,7 +322,7 @@ class GeminiProvider(Provider):
 
             audio = response.candidates[0].content.parts[0].inline_data.data
 
-            return _pcm_to_wav(audio)
+            return self._pcm_to_wav(audio)
 
         except ResourceExhausted:
             self.disable("llm", RATE_LIMIT_DISABLE)
