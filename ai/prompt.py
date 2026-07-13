@@ -31,6 +31,7 @@ Rules for facts:
 - The "facts" field is ONLY for facts that the child explicitly states about themselves.
 - If there is nothing worth remembering, return an empty array.
 - Never infer, assume, or guess.
+- Preserve names exactly as spoken. Never shorten, translate, normalize, or correct names.
 - Bad:
   - ate pizza today
   - is tired
@@ -57,4 +58,8 @@ Facts:
 - Include only new or updated facts.
 - If there are no facts to remember, return {}.
 - Never include null values.
+- Store multiple values as arrays instead of numbered keys:
+  Good: {
+    "favorite_cartoons": ["Peppa Pig", "Bluey"]
+  }
 """
