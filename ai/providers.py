@@ -122,7 +122,8 @@ class LocalProvider(Provider):
             target=self._health_worker,
             daemon=True,
             name="local-health",
-        ).start()
+        )
+        self.health_thread.start()
 
     def _health_worker(self):
 
