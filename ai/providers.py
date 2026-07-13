@@ -473,14 +473,14 @@ class GroqProvider(Provider):
                 return ""
             return text
 
-        except Groq.RateLimitError:
+        except groq.RateLimitError:
             self.disable("llm", RATE_LIMIT_DISABLE)
             raise
 
         except (
-            Groq.APIConnectionError,
-            Groq.APITimeoutError,
-            Groq.InternalServerError,
+            groq.APIConnectionError,
+            groq.APITimeoutError,
+            groq.InternalServerError,
         ):
             self.disable("llm", CONNECTION_DISABLE)
             raise
