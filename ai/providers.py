@@ -167,7 +167,7 @@ class LocalProvider(Provider):
                 logger.warning(f"{model.name} is offline")
 
     def stop(self):
-
+        logger.info("Stopping LocalProvider...")
         self.stop_event.set()
         self.health_thread.join()
 

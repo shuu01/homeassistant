@@ -404,11 +404,12 @@ def main():
         logger.info("Shutting down...")
 
     finally:
+        logger.info("Stopping InputStream...")
         stream.stop()
         stream.close()
-        memory.stop()
-        conversation.stop()
+        logger.info("Stopping AI...")
         ai.stop()
+        logger.info("Stopping Storage...")
         storage.stop()
 
         wakeword_queue.put(None)
