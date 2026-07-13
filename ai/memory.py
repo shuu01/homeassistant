@@ -1,8 +1,4 @@
-import queue
-import threading
-
 from logger import logger
-
 
 class Memory:
 
@@ -10,16 +6,8 @@ class Memory:
         self.filename = "facts.json"
         self.storage = storage
         self.facts = {}
-        self.queue = queue.Queue()
 
         self._load()
-
-        self.thread = threading.Thread(
-            target=self._worker,
-            daemon=True,
-            name="memory",
-        )
-        self.thread.start()
 
     def _load(self):
         try:
@@ -38,35 +26,29 @@ class Memory:
             )
             self.facts = {}
 
-    def stop(self):
-
-        self.queue.join()
-        self.queue.put(None)
-        self.thread.join()
-
     def update(self, new_facts):
-        if new_facts:
-            self.queue.put(new_facts)
 
-    def _worker(self):
-        while True:
-            new_facts = self.queue.get()
-            if new_facts is None:
-                self.queue.task_done()
-                return
+        if not new_facts:
+            return
 
-            changed = False
+        changed = False
 
-            for key, value in new_facts.items():
-                if self.facts.get(key) != value:
-                    self.facts[key] = value
-                    changed = True
+        for key, value in new_facts.items():
+            current = self.facts.get(key, [])
+            if not isinstance(current, list):
+                current = [current]
+            if not isinstance(value, list):
+                value = [value]
 
-            if changed:
-                try:
-                    self.storage.save_json(self.filename, self.facts)
-                    logger.info("Memory saved")
-                except Exception:
-                    logger.exception("Failed to save memory")
+            merged = list(dict.fromkeys(current + value))
 
-            self.queue.task_done()
+            if merged != current:
+                self.facts[key] = merged
+                changed = True
+
+        if changed:
+            try:
+                self.storage.save_json(self.filename, self.facts)
+                logger.info("Memory saved")
+            except Exception:
+                logger.exception("Failed to save memory")

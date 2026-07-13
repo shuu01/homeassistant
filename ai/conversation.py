@@ -1,7 +1,4 @@
 from collections import deque
-from queue import Queue
-import threading
-
 from logger import logger
 
 
@@ -11,22 +8,8 @@ class Conversation:
         self.filename = "messages.json"
         self.storage = storage
         self.messages = deque(maxlen=max_messages)
-        self.queue = Queue()
 
         self._load()
-
-        self.thread = threading.Thread(
-            target=self._worker,
-            daemon=True,
-            name="conversation",
-        )
-        self.thread.start()
-
-    def stop(self):
-
-        self.queue.join()
-        self.queue.put(None)
-        self.thread.join()
 
     def _load(self):
 
@@ -40,32 +23,18 @@ class Conversation:
                 f"Failed to load messages: {e}"
             )
 
-    def _worker(self):
-
-        while True:
-
-            item = self.queue.get()
-            if item is None:
-                self.queue.task_done()
-                return
-            role, text = item
-            self.messages.append(
-                {
-                    "role": role,
-                    "text": text,
-                }
-            )
-
-            self.storage.save_json(
-                self.filename,
-                list(self.messages)
-            )
-
-            self.queue.task_done()
-
     def add(self, role, text):
-        self.queue.put(
-            (role, text)
+
+        self.messages.append(
+            {
+                "role": role,
+                "text": text,
+            }
+        )
+
+        self.storage.save_json(
+            self.filename,
+            list(self.messages)
         )
 
     def clear(self):

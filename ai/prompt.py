@@ -57,8 +57,7 @@ Facts:
 - Keys should be snake_case.
 - Include only new or updated facts.
 - If there are no facts to remember, return {}.
-- Never include null values.
-- Store multiple values as arrays instead of numbered keys:
+- Every fact value must be an array of strings, even if it contains only one item.
   Good: {
     "favorite_cartoons": ["Peppa Pig", "Bluey"]
   }
