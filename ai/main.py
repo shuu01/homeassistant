@@ -385,7 +385,7 @@ def main():
             if user_text:
                 logger.info(f"user: {user_text}")
                 facts = memory.facts
-                messages = conversation.messages
+                messages = conversation.recent_messages()
                 prompt = compose_prompt(user_text, messages, facts)
                 try:
                     response = ai.ask(prompt)

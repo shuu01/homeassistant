@@ -1,8 +1,10 @@
 from collections import deque
 from logger import logger
+import time
 
 
 class Conversation:
+    CONVERSATION_TTL = 60 * 60  # 1 hour
 
     def __init__(self, storage, max_messages=20):
         self.filename = "messages.json"
@@ -29,6 +31,7 @@ class Conversation:
             {
                 "role": role,
                 "text": text,
+                "timestamp": time.time(),
             }
         )
 
@@ -40,3 +43,15 @@ class Conversation:
     def clear(self):
         self.messages.clear()
         self.storage.save_json(self.filename, [])
+
+    def recent_messages(self):
+        cutoff = time.time() - CONVERSATION_TTL
+
+        return [
+            {
+                "role": m["role"],
+                "text": m["text"],
+            }
+            for m in self.messages
+            if m.get("timestamp", 0) >= cutoff
+        ]
