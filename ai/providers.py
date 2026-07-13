@@ -465,7 +465,7 @@ class GroqProvider(Provider):
 
             data = response.strip()
 
-            text = data.get("text", "").strip()
+            text = text.strip()
             # filter gibberish
             if re.fullmatch(r"\([^)]*\)", text):
                 return ""
