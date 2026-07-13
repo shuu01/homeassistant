@@ -231,7 +231,7 @@ def wakeword_worker():
             logger.info("Wake word detected")
             wake_event.set()
             wake_hits = 0
-            #wake_model.reset()
+            wake_model.reset()
 
 
 def tts_worker(ai, fallbacks):
