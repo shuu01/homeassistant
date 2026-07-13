@@ -4,6 +4,7 @@ import time
 import re
 import random
 import threading
+import signal
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
@@ -47,6 +48,12 @@ wake_event = threading.Event()
 recording_event = threading.Event()
 recording_done = threading.Event()
 tts_failed = threading.Event()
+shutdown = threading.Event()
+
+
+def handle_shutdown(signum, frame):
+    logger.info("Received signal %s", signum)
+    shutdown.set()
 
 
 def compose_prompt(text, messages=None, facts=None):
@@ -304,6 +311,9 @@ def load_wav_files(path):
 
 def main():
 
+    signal.signal(signal.SIGTERM, handle_shutdown)
+    signal.signal(signal.SIGINT, handle_shutdown)
+
     greetings = load_wav_files(GREETINGS_DIR)
     fallbacks = load_wav_files(FALLBACKS_DIR)
 
@@ -331,92 +341,90 @@ def main():
 
     stream.start()
     logger.info("Listening for wake word...")
-    try:
-        while True:
 
-            wake_event.clear()
-            wake_event.wait()
-            while not audio_input_queue.empty():
-                audio_input_queue.get_nowait()
-            while not wakeword_queue.empty():
-                wakeword_queue.get_nowait()
+    while not shutdown.is_set():
 
-            play(greetings)
+        if not wake_event.wait(timeout=1):
+            continue
 
-            recording_event.set()
-            recording_done.clear()
-            recording_done.wait()
+        wake_event.clear()
 
-            if not chunks:
-                logger.info("No speech captured")
-                continue
+        while not audio_input_queue.empty():
+            audio_input_queue.get_nowait()
+        while not wakeword_queue.empty():
+            wakeword_queue.get_nowait()
+
+        play(greetings)
+
+        recording_event.set()
+        recording_done.clear()
+        recording_done.wait()
+
+        if not chunks:
+            logger.info("No speech captured")
+            continue
+
+        try:
+            wav_buffer = io.BytesIO()
+            write(wav_buffer, RATE, np.concatenate(chunks, axis=0))
+            wav_buffer.seek(0)
+
+            sf.write(
+                "/tmp/debug.wav",
+                np.concatenate(chunks),
+                RATE,
+            )
 
             try:
-                wav_buffer = io.BytesIO()
-                write(wav_buffer, RATE, np.concatenate(chunks, axis=0))
-                wav_buffer.seek(0)
+                user_text = ai.transcribe(wav_buffer)
+            except Exception as e:
+                logger.error(f"STT failed: {e}")
+                play(fallbacks)
+                continue
 
-                sf.write(
-                    "/tmp/debug.wav",
-                    np.concatenate(chunks),
-                    RATE,
-                )
-
+            if user_text:
+                logger.info(f"user: {user_text}")
+                facts = memory.facts
+                messages = conversation.messages
+                prompt = compose_prompt(user_text, messages, facts)
                 try:
-                    user_text = ai.transcribe(wav_buffer)
+                    response = ai.ask(prompt)
+                    answer = response.get('answer')
+                    new_facts = response.get('facts')
+                    conversation.add("child", user_text)
+                    conversation.add("assistant", answer)
+                    memory.update(new_facts)
+                    logger.info(f"facts: {new_facts}")
                 except Exception as e:
-                    logger.error(f"STT failed: {e}")
+                    logger.error(f"Answer failed: {e}")
                     play(fallbacks)
                     continue
 
-                if user_text:
-                    logger.info(f"user: {user_text}")
-                    facts = memory.facts
-                    messages = conversation.messages
-                    prompt = compose_prompt(user_text, messages, facts)
-                    try:
-                        response = ai.ask(prompt)
-                        answer = response.get('answer')
-                        new_facts = response.get('facts')
-                        conversation.add("child", user_text)
-                        conversation.add("assistant", answer)
-                        memory.update(new_facts)
-                        logger.info(f"facts: {new_facts}")
-                    except Exception as e:
-                        logger.error(f"Answer failed: {e}")
-                        play(fallbacks)
-                        continue
+                tts_failed.clear()
+                for sentence in split_sentences(answer):
+                    if sentence.strip():
+                        tts_queue.put(sentence)
 
-                    tts_failed.clear()
-                    for sentence in split_sentences(answer):
-                        if sentence.strip():
-                            tts_queue.put(sentence)
+        except Exception as e:
+            logger.error(e)
 
-            except Exception as e:
-                logger.error(e)
+        tts_queue.join()
+        audio_output_queue.join()
+        chunks.clear()
+        logger.info("Returning to sleep...")
 
-            tts_queue.join()
-            audio_output_queue.join()
-            chunks.clear()
-            logger.info("Returning to sleep...")
-
-    except KeyboardInterrupt:
-        logger.info("Shutting down...")
-
-    finally:
-        logger.info("Stopping InputStream...")
-        stream.stop()
-        stream.close()
-        logger.info("Stopping AI...")
-        ai.stop()
-        logger.info("Stopping Storage...")
-        storage.stop()
-
-        wakeword_queue.put(None)
-        audio_input_queue.put(None)
-        audio_output_queue.put(None)
-        tts_queue.put(None)
-        logger.info("Shutdown complete.")
+    logger.info("Stopping InputStream...")
+    stream.stop()
+    stream.close()
+    wakeword_queue.put(None)
+    audio_input_queue.put(None)
+    audio_output_queue.put(None)
+    tts_queue.put(None)
+    logger.info("Stopping AI...")
+    ai.stop()
+    logger.info("Stopping Storage...")
+    storage.stop()
+    logger.info("Shutdown complete.")
 
 
 if __name__ == "__main__":
