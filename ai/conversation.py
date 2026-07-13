@@ -45,7 +45,7 @@ class Conversation:
         self.storage.save_json(self.filename, [])
 
     def recent_messages(self):
-        cutoff = time.time() - CONVERSATION_TTL
+        cutoff = time.time() - self.CONVERSATION_TTL
 
         return [
             {
