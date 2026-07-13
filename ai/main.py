@@ -298,6 +298,7 @@ def load_wav_files(path):
         raise RuntimeError(
             f"No WAV files found in {path}"
         )
+    logger.info(f"WAV from {path} are loaded")
     return files
 
 
@@ -369,6 +370,7 @@ def main():
                     continue
 
                 if user_text:
+                    logger.info(f"user: {user_text}")
                     facts = memory.facts
                     messages = conversation.messages
                     prompt = compose_prompt(user_text, messages, facts)
@@ -407,6 +409,7 @@ def main():
         memory.stop()
         conversation.stop()
         ai.stop()
+        storage.stop()
 
         wakeword_queue.put(None)
         audio_input_queue.put(None)
