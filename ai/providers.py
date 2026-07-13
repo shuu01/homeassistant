@@ -525,17 +525,12 @@ class OpenAIProvider(Provider):
                                 "facts": {
                                     "type": "object",
                                     "additionalProperties": {
-                                        "anyOf": [
-                                            {
+                                        {
+                                            "type": "array",
+                                            "items": {
                                                 "type": "string",
                                             },
-                                            {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string",
-                                                },
-                                            },
-                                        ],
+                                        },
                                     },
                                 },
                             },

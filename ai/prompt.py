@@ -26,6 +26,25 @@ Rules for answer:
 
 Rules for facts:
 - Store only long-term facts about the child.
+- Examples:
+  - name
+  - age
+  - birthday
+  - family members
+  - pets
+  - favorite foods
+  - favorite cartoons
+  - favorite books
+  - favorite games
+  - favorite colors
+  - favorite animals
+  - hobbies
+  - fears
+  - allergies
+  - school
+  - friends
+  - recurring preferences
+- Store preferences even if expressed as "I like..." or "I love...".
 - Memories should be useful in future conversations.
 - Do not store temporary events.
 - The "facts" field is ONLY for facts that the child explicitly states about themselves.
@@ -57,7 +76,7 @@ Facts:
 - Keys should be snake_case.
 - Include only new or updated facts.
 - If there are no facts to remember, return {}.
-- Every fact value must be an array of strings, even if it contains only one item.
+- Always use arrays because additional values may be added later.
   Good: {
     "favorite_cartoons": ["Peppa Pig", "Bluey"]
   }
