@@ -36,14 +36,14 @@ class AI:
         ]
 
         self.tts = [
-            self.local,
             self.groq,
+            self.local,
             self.gemini,
         ]
 
         self.stt = [
-            self.local,
             self.groq,
+            self.local,
         ]
 
     def _run(self, capability, providers, *args, **kwargs):
