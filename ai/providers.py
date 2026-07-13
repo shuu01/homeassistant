@@ -8,6 +8,8 @@ import wave
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+import groq
+import openai
 from google import genai
 from google.genai import types
 from groq import Groq
