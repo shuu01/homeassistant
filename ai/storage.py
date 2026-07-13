@@ -88,7 +88,10 @@ class GistStorage:
             except Empty:
                 pass
 
-            self._flush()
+            try:
+                self._flush()
+            except Exception:
+                logger.exception("Failed to flush gist")
 
     def _flush(self):
 
@@ -131,15 +134,6 @@ class GistStorage:
                 self._dirty.update(payload["files"].keys())
 
             raise
-
-        response = requests.patch(
-            self.url,
-            headers=self.headers,
-            json=payload,
-            timeout=10,
-        )
-
-        response.raise_for_status()
 
     def stop(self):
 

@@ -461,7 +461,17 @@ class GroqProvider(Provider):
                 response_format="text",
             )
 
-            return response.strip()
+            data = response.strip()
+
+            text = data.get("text", "").strip()
+            # filter gibberish
+            if re.fullmatch(r"\([^)]*\)", text):
+                return ""
+            if re.fullmatch(r"\[[^\]]*\]", text):
+                return ""
+            if len(text) < 3:
+                return ""
+            return text
 
         except Groq.RateLimitError:
             self.disable("llm", RATE_LIMIT_DISABLE)
