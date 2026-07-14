@@ -102,6 +102,7 @@ class Provider:
             return ""
         if text.lower() in self.GLITCHES:
             return ""
+        return text
 
     def ask(self, prompt):
         raise NotImplementedError
