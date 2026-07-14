@@ -65,6 +65,7 @@ class Provider:
         "thanks",
         "thank you.",
         "thanks.",
+        "...",
     ]
 
     def __init__(self):
