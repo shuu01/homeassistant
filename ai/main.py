@@ -122,11 +122,14 @@ def callback(indata, frames, time_info, status):
         audio_input_queue.put_nowait(block)
     except Full:
         pass
-    if not recording_event.is_set():
-        try:
-            wakeword_queue.put_nowait(block)
-        except Full:
-            pass
+
+    if interaction_event.is_set():
+        return
+
+    try:
+        wakeword_queue.put_nowait(block)
+    except Full:
+        pass
 
 
 def record_worker():
