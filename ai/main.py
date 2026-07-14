@@ -208,6 +208,10 @@ def wakeword_worker():
             return
         if interaction_event.is_set():
             continue
+        if speaking_event.is_set():
+            continue
+        if recording_event.is_set():
+            continue
 
         audio = resample_poly(
             audio.flatten(),
