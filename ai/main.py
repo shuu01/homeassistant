@@ -45,6 +45,7 @@ audio_input_queue = Queue(maxsize=20)
 wakeword_queue = Queue(maxsize=20)
 speaking_event = threading.Event()
 wake_event = threading.Event()
+interaction_event = threading.Event()
 recording_event = threading.Event()
 recording_done = threading.Event()
 tts_failed = threading.Event()
@@ -205,10 +206,7 @@ def wakeword_worker():
         audio = wakeword_queue.get()
         if audio is None:
             return
-
-        if recording_event.is_set():
-            continue
-        if speaking_event.is_set():
+        if interaction_event.is_set():
             continue
 
         audio = resample_poly(
@@ -348,6 +346,7 @@ def main():
             continue
 
         wake_event.clear()
+        interaction_event.set()
 
         while not audio_input_queue.empty():
             audio_input_queue.get_nowait()
@@ -407,11 +406,12 @@ def main():
 
         except Exception as e:
             logger.error(e)
-
-        tts_queue.join()
-        audio_output_queue.join()
-        chunks.clear()
-        logger.info("Returning to sleep...")
+        finally:
+            chunks.clear()
+            interaction_event.clear()
+            tts_queue.join()
+            audio_output_queue.join()
+            logger.info("Returning to sleep...")
 
     logger.info("Stopping InputStream...")
     stream.stop()
