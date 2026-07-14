@@ -412,10 +412,10 @@ def main():
             logger.error(e)
         finally:
             chunks.clear()
-            interaction_event.clear()
             tts_queue.join()
             audio_output_queue.join()
             logger.info("Returning to sleep...")
+            interaction_event.clear()
 
     logger.info("Stopping InputStream...")
     stream.stop()
