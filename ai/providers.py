@@ -60,6 +60,12 @@ class Provider:
     RATE_LIMIT_DISABLE = 3600
     CONNECTION_DISABLE = 300
     TIMEOUT_DISABLE = 120
+    GLITCHES = [
+        "thank you",
+        "thanks",
+        "thank you.",
+        "thanks.",
+    ]
 
     def __init__(self):
         self.name = None
@@ -86,6 +92,16 @@ class Provider:
             f"{self.name} {capability} disabled until "
             f"{model.disabled_until.isoformat(timespec='seconds')}",
         )
+    def filter_tts(self, text):
+        # filter gibberish
+        if re.fullmatch(r"\([^)]*\)", text):
+            return ""
+        if re.fullmatch(r"\[[^\]]*\]", text):
+            return ""
+        if len(text) < 3:
+            return ""
+        if text.lower() in self.GLITCHES:
+            return ""
 
     def ask(self, prompt):
         raise NotImplementedError
@@ -202,12 +218,7 @@ class LocalProvider(Provider):
         data = response.json()
         text = data.get("text", "").strip()
         # filter gibberish
-        if re.fullmatch(r"\([^)]*\)", text):
-            return ""
-        if re.fullmatch(r"\[[^\]]*\]", text):
-            return ""
-        if len(text) < 3:
-            return ""
+        text = self.filter_tts(text)
         return text
 
     def synthesize(
@@ -467,12 +478,7 @@ class GroqProvider(Provider):
 
             text = data.strip()
             # filter gibberish
-            if re.fullmatch(r"\([^)]*\)", text):
-                return ""
-            if re.fullmatch(r"\[[^\]]*\]", text):
-                return ""
-            if len(text) < 3:
-                return ""
+            text = self.filter_tts(text)
             return text
 
         except groq.RateLimitError:
