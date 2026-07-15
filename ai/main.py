@@ -417,6 +417,12 @@ def main():
             chunks.clear()
             tts_queue.join()
             audio_output_queue.join()
+            time.sleep(1.0)
+            while True:
+                try:
+                    wakeword_queue.get_nowait()
+                except Empty:
+                    break
             logger.info("Returning to sleep...")
             interaction_event.clear()
 

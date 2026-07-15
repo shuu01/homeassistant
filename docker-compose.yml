@@ -124,8 +124,6 @@ services:
     restart: unless-stopped
     ports:
       - 8081:8080/tcp
-    # devices:
-    #   - /dev/snd:/dev/snd
     logging:
       driver: "json-file"
       options:
@@ -140,8 +138,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    # devices:
-    #   - /dev/snd:/dev/snd
     ports:
       - 8080:8080/tcp
     logging:
@@ -149,3 +145,19 @@ services:
       options:
         max-size: "10m"
         max-file: 3
+  linux-voice-assistant:
+    container_name: linux-voice-assistant
+    image: ghcr.io/ohf-voice/linux-voice-assistant:latest
+    restart: unless-stopped
+    network_mode: host
+    user: "${LVA_USER_ID:-1000}:${LVA_USER_GROUP:-1000}"
+    env_file:
+      - .env
+    group_add:
+      - audio
+    # Priority for audio process
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - /run/user/$LVA_USER_ID/pulse/native:/run/user/$LVA_USER_ID/pulse/native
+      - /etc/machine-id:/etc/machine-id:ro
