@@ -3,7 +3,8 @@ services:
     container_name: homeassistant
     image: ghcr.io/home-assistant/home-assistant:stable
     volumes:
-      - ./config:/config
+      - ${HOME}/config:/config
+      - ${HOME}/media:/media
       - /etc/localtime:/etc/localtime:ro
       - /run/dbus:/run/dbus:ro
     restart: unless-stopped
@@ -14,11 +15,12 @@ services:
       options:
         max-size: "10m"
         max-file: 3
+
   esphome:
     container_name: esphome
     image: ghcr.io/esphome/esphome
     volumes:
-      - ./:/config
+      - ${HOME}/esphome:/config
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
     privileged: true
@@ -29,6 +31,7 @@ services:
       options:
         max-size: "10m"
         max-file: 3
+
   mqtt:
     container_name: mqtt
     image: eclipse-mosquitto
@@ -36,12 +39,13 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./mqtt:/mosquitto/config
+      - ${HOME}/mqtt:/mosquitto/config
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: 3
+
   metube:
     image: ghcr.io/alexta69/metube
     container_name: metube
@@ -49,12 +53,13 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - ./youtube:/downloads
+      - ${HOME}/media:/downloads
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: 3
+
   mpd:
     image: tobi312/rpi-mpd:alpine
     container_name: mpd
@@ -62,10 +67,10 @@ services:
     ports:
       - "6600:6600"
     volumes:
-      - ./youtube:/var/lib/mpd/music:ro
-      - ./mpd/config:/root/.config
-      - ./mpd/data:/var/lib/mpd/data
-      - ./mpd/mpd.conf:/etc/mpd.conf:rw
+      - ${HOME}/media:/var/lib/mpd/music:ro
+      - ${HOME}/mpd/config:/root/.config
+      - ${HOME}/mpd/data:/var/lib/mpd/data
+      - ${HOME}/mpd/mpd.conf:/etc/mpd.conf:rw
     # Devices may be needed to output audio to your local host hardware
     devices:
       - /dev/snd:/dev/snd
@@ -74,6 +79,7 @@ services:
       options:
         max-size: "10m"
         max-file: 3
+
   mympd:
     image: ghcr.io/jcorporation/mympd/mympd:latest
     container_name: mympd
@@ -90,15 +96,16 @@ services:
       MYMPD_ACL: +0.0.0.0/0
       #MYMPD_MYMPD_URI: http://ha.local:8080
     volumes:
-      - ./youtube/:/var/lib/mpd/music:ro
-      - ./mpd/playlists/:/var/lib/mpd/playlists/:ro
-      - ./mympd/lib:/var/lib/mympd/:rw
-      - ./mympd/cachedir:/var/cache/mympd
+      - ${HOME}/media:/var/lib/mpd/music:ro
+      - ${HOME}/mpd/playlists/:/var/lib/mpd/playlists/:ro
+      - ${HOME}/mympd/lib:/var/lib/mympd/:rw
+      - ${HOME}/mympd/cachedir:/var/cache/mympd
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: 3
+
   ai:
     image: ai:latest
     build:
@@ -115,6 +122,7 @@ services:
       options:
         max-size: "10m"
         max-file: 3
+
   whisper:
     image: whisper:latest
     build:
@@ -124,11 +132,33 @@ services:
     restart: unless-stopped
     ports:
       - 8081:8080/tcp
+    depends_on:
+      wyoming-whisper-api-client:
+        condition: service_started
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: 3
+
+  wyoming-whisper-api-client:
+    image: ghcr.io/ser/wyoming-whisper-api-client:latest
+    container_name: wyoming-whisper-api-client
+    ports:
+      - 10300:10300
+    command:
+      - --debug
+      - --uri
+      - tcp://0.0.0.0:10300
+      - --api
+      - http://whisper:8080/inference
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: 3
+
   kokoro:
     image: kokoro:latest
     build:
@@ -145,8 +175,10 @@ services:
       options:
         max-size: "10m"
         max-file: 3
-  linux-voice-assistant:
+
+  lva:
     container_name: linux-voice-assistant
+    hostname: lva
     image: ghcr.io/ohf-voice/linux-voice-assistant:latest
     restart: unless-stopped
     network_mode: host
@@ -159,5 +191,31 @@ services:
     cap_add:
       - SYS_NICE
     volumes:
+      - /run/user/$LVA_USER_ID:/run/user/$LVA_USER_ID
       - /run/user/$LVA_USER_ID/pulse/native:/run/user/$LVA_USER_ID/pulse/native
       - /etc/machine-id:/etc/machine-id:ro
+      - wakeword_data:/app/local
+      - configuration:/app/configuration
+      - ${HOME}/media:/media
+    depends_on:
+      lva-init:
+        condition: service_completed_successfully
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: 3
+
+  lva-init:
+    image: alpine
+    container_name: lva-init
+    env_file:
+      - .env
+    volumes:
+      - wakeword_data:/app/local
+      - configuration:/app/configuration
+    command: chown -R ${LVA_USER_ID:-1000}:${LVA_USER_GROUP:-1000} /app/local /app/configuration
+
+volumes:
+  wakeword_data:
+  configuration:

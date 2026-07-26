@@ -18,6 +18,7 @@ homeassistant:
   allowlist_external_dirs:
     #- "/usr/var/dumping-ground"
     - "/tmp"
+    - "/media"
   allowlist_external_urls:
     - "http://images.com/image1.png"
   media_dirs:
@@ -25,7 +26,7 @@ homeassistant:
     recordings: "/mnt"
 
 # Default integrations from default_config:
-#assist_pipeline:
+assist_pipeline:
 #backup:
 bluetooth:
 config:
@@ -57,6 +58,7 @@ script: !include scripts.yaml
 scene: !include scenes.yaml
 #template: !include templates.yaml
 sensor: !include sensors.yaml
+shell_command: !include shell_commands.yaml
 
 weather:
 #camera:

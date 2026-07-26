@@ -14,7 +14,7 @@ RUN git clone --depth=1 https://github.com/ggml-org/whisper.cpp.git .
 
 RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
-    -DGGML_NATIVE=OFF \
+    -DGGML_NATIVE=ON \
     -DBUILD_SHARED_LIBS=OFF
 
 RUN cmake --build build \
@@ -25,18 +25,16 @@ FROM debian:stable-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        wget \
-        ca-certificates \
         libgomp1 && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/build/bin/whisper-server /usr/local/bin/whisper-server
 
 WORKDIR /models
-RUN wget -O /models/ggml-tiny.en.bin \
-    https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin
+ADD https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin \
+    /models/ggml-base.en-q5_1.bin
 
 EXPOSE 8080
 
-CMD ["/usr/local/bin/whisper-server", "-m", "/models/ggml-tiny.en.bin", \
+CMD ["/usr/local/bin/whisper-server", "-m", "/models/ggml-base.en-q5_1.bin", \
   "--host", "0.0.0.0", "--port", "8080"]
