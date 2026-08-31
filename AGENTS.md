@@ -2,20 +2,26 @@
 
 ## What this is
 
-A personal Home Assistant setup with a custom voice assistant. All services run as Docker containers via `docker-compose.yml`. There is **no test suite, linter, formatter, or typecheck** — changes are verified by running the stack.
+A personal Home Assistant + voice assistant (lva) + music stack. All services run as Docker containers via `docker-compose.yml`. **No test suite, linter, formatter, or typecheck** — verify changes by rebuilding the touched container and reading its logs.
 
-## Services (docker-compose)
+## Deployment layout (read first)
 
-| Service | Purpose | Port | Notes |
-|---------|---------|------|-------|
-| `homeassistant` | HA core | 8123 (internal) | Mounts `./config` |
-| `esphome` | IoT device firmware | — | **Mounts entire repo root as `/config`** — any file you add to the repo is visible inside this container |
-| `mqtt` | Mosquitto broker | host network | Config at `mqtt/mosquitto.conf` |
-| `ai` | Voice assistant (custom) | — | Requires `/dev/snd` (audio). Entry: `ai/main.py` |
-| `whisper` | STT server (whisper.cpp) | 8081→8080 | Built from source in Dockerfile |
-| `kokoro` | TTS server (FastAPI) | 8080→8080 | Requires `.env` for model download on first build |
-| `metube` | YouTube downloader | 8081 | **Port conflict with `whisper`** — both claim host port 8081 |
-| `mpd` / `mympd` | Music player + web UI | 6600, 8080 | Plays files from `./youtube` |
+`docker-compose.yml` resolves most volumes from `${HOME}`, not the repo: `${HOME}/config`, `${HOME}/media`, `${HOME}/esphome`, `${HOME}/mqtt`, `${HOME}/mpd`, `${HOME}/mympd`; `mass` mounts its data dir from `${USERDIR:-$HOME}/docker/music-assistant-server`. The repo's top-level `esphome/`, `mqtt/` dirs mirror that layout — i.e. the repo is meant to be checked out at `$HOME` on the host that runs compose. On a dev Mac (`$HOME` points elsewhere) `docker compose up` mounts non-existent paths; set `export HOME=<repo>` first or run on the actual host. `.env` is also read by compose for `$VAR` substitution (see Environment).
+
+## Services
+
+| Service | Purpose | Ports | Notes |
+|---------|---------|-------|-------|
+| `homeassistant` | HA core | 8123 | `network_mode: host`, privileged. Mounts `${HOME}/config`, `${HOME}/media`. |
+| `esphome` | IoT device firmware | — | `network_mode: host`. Mounts **only** `${HOME}/esphome` as `/config` — not the repo root. |
+| `mqtt` | Mosquitto broker | 1883 | `network_mode: host`. Config: `${HOME}/mqtt/mosquitto.conf` (repo: `mqtt/mosquitto.conf`). |
+| `metube` | YouTube downloader | 8081→8081 | Downloads into `${HOME}/media`. |
+| `mass` | Music Assistant server | — | `network_mode: host`. Volumes use `${USERDIR:-$HOME}` and a placeholder music path (see Gotchas). |
+| `mpd` / `mympd` | Music player + web UI | 6600, 8080 | Play files from `${HOME}/media`. mpd passes `/dev/snd`. |
+| `whisper` | STT (whisper.cpp) | 8081→8080 | Built from source (git clone + cmake) in `whisper/Dockerfile`; model downloaded via `ADD` at build. |
+| `wyoming-whisper-api-client` | Bridges whisper → Wyoming for HA | 10300→10300 | `depends_on` whisper; targets `http://whisper:8080`. |
+| `kokoro` | TTS (FastAPI) | 8080→8080 | `env_file: .env`. Downloads ONNX model from GitHub at build. |
+| `lva` | Voice assistant | — | `network_mode: host`, `env_file: .env`. Needs PulseAudio socket; `lva-init` chowns its named volumes first. Host audio setup lives in `README.md`. |
 
 ## Build & deploy
 
@@ -24,48 +30,29 @@ A personal Home Assistant setup with a custom voice assistant. All services run 
 docker compose up -d --build
 
 # Rebuild a single service
-docker compose up -d --build ai
+docker compose up -d --build kokoro
 
 # View logs
-docker compose logs -f ai
+docker compose logs -f lva
 ```
 
-CI (`.github/workflows/docker.yml`) only builds `whisper` and `kokoro` images on push to `main`. The `ai` image is built locally only.
-
-## AI service (`ai/`)
-
-Python 3.12 app. Entry point: `ai/main.py`. Runs as a single-threaded main loop with background worker threads.
-
-**Flow:** wake word → record audio → STT → LLM → TTS → speaker output.
-
-**Provider fallback chain** (configured in `ai/ai.py`):
-- LLM: Gemini → Groq → OpenAI → OpenRouter
-- TTS: Groq → Local (kokoro) → Gemini
-- STT: Groq → Local (whisper)
-
-Each provider is enabled/disabled by the presence of its API key env var. Providers auto-disable on rate limits/errors with backoff.
-
-**Persistence:** Conversation history and child facts are stored in a GitHub Gist via `ai/storage.py` (requires `GITHUB_TOKEN` + `GIST_ID` env vars).
-
-**Prerequisites for the `ai` container:**
-- `./greetings/` and `./fallbacks/` directories must exist with `.wav` files (gitignored)
-- Audio hardware (`/dev/snd`) must be available
-- `.env` must set the appropriate API keys and audio device IDs
+- Rebuilding `whisper` compiles whisper.cpp from source — slow. Avoid full-stack `--build` unless needed.
+- `whisper` and `kokoro` downloads happen inside `docker build` (`ADD` from GitHub/HuggingFace) — builds need outbound network.
+- CI (`.github/workflows/docker.yml`) builds only `whisper`/`kokoro` (push to `main`, paths-filtered).
 
 ## Environment
 
-`.env` is gitignored. The `ai`, `kokoro`, and `linux-voice-assistant` services load it via `env_file`. Key variables for the AI service:
+`.env` is gitignored, read both by compose for `$VAR` substitution and injected via `env_file` into `kokoro`, `lva`, and `lva-init`. Key vars:
 
-- `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` — each enables its provider
-- `TTS_SERVER`, `STT_SERVER` — URLs for local kokoro/whisper services (enables `LocalProvider`)
-- `INPUT_DEVICE`, `OUTPUT_DEVICE` — audio device indices (defaults: 0, 4)
-- `GITHUB_TOKEN`, `GIST_ID` — for gist-based persistence
-- `WAKE_THRESHOLD`, `VOLUME_THRESHOLD` — wake word / speech detection tuning
+- `LVA_USER_ID`/`LVA_USER_GROUP` — host uid/gid mapping for the lva containers (also used by compose's `user:`)
+- `PULSE_SERVER` — PulseAudio socket path; defaults to `/run/user/$LVA_USER_ID/pulse/native`
+- `WAKEUP_SOUND` — path to a static wake sound on the host (e.g. `${HOME}/media/wakeup_sounds/sound.wav`); must exist
+- `WAKE_MODEL`, `CLIENT_NAME`, `LVA_NAME`, `HOST`, `LISTEN_DURING_WAKE_SOUND` — lva tuning
 
 ## Gotchas
 
-- **ESPHome mounts the repo root.** Every file in the repo is visible inside the esphome container at `/config`. Don't put secrets at the repo root.
-- **Port 8081 conflict.** Both `metube` and `whisper` map to host port 8081. Only run one at a time or remap.
-- **No automated tests.** Validate changes by running the relevant container and checking logs.
-- **`greetings/` and `fallbacks/` are required** but gitignored. The AI service crashes on startup without them.
-- The `linux-voice-assistant` service references `LVA_USER_ID` / `LVA_USER_GROUP` env vars for user mapping and needs PulseAudio socket volume mounts.
+- **Two port conflicts:** `whisper` vs `metube` both bind host 8081; `kokoro` vs `mympd` both bind host 8080. Run conflicting pairs one at a time or remap.
+- **`mass` has placeholder paths:** `- /path/to/your/music:/media:ro` must be pointed at real music, and its data dir resolves to `${USERDIR:-$HOME}/docker/music-assistant-server` — set `USERDIR` or it lands under `$HOME`.
+- **`esphome` mounts only `${HOME}/esphone`** — repo-root files are not visible inside it.
+- **`lva`** needs a PulseAudio socket at `/run/user/$LVA_USER_ID/pulse/native` with `PULSE_SERVER` set, and `WAKEUP_SOUND` must exist on the host. Host-side setup (PipeWire, systemd linger, udev) is documented in `README.md`.
+- **No automated tests.** Validate by rebuilding the touched container and checking `docker compose logs`.

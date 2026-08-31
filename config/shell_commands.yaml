@@ -1,2 +1,0 @@
----
-wakeup_sound_rand: cp $(ls "/media/wakeup_sounds/pool/*.wav" | shuf -n 1) "/media/wakeup_sounds/sound.wav"

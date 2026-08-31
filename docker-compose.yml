@@ -60,6 +60,22 @@ services:
         max-size: "10m"
         max-file: 3
 
+  mass:
+    image: ghcr.io/music-assistant/server:latest
+    container_name: mass
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ${$HOME}/mass/data:/data/
+      - ${HOME}/media:/media:ro
+    environment:
+      - LOG_LEVEL=info
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: 3
+
   mpd:
     image: tobi312/rpi-mpd:alpine
     container_name: mpd
@@ -106,23 +122,6 @@ services:
         max-size: "10m"
         max-file: 3
 
-  ai:
-    image: ai:latest
-    build:
-      context: .
-      dockerfile: ./ai/Dockerfile
-    env_file:
-      - .env
-    container_name: ai
-    restart: unless-stopped
-    devices:
-      - /dev/snd:/dev/snd
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: 3
-
   whisper:
     image: whisper:latest
     build:
@@ -130,8 +129,6 @@ services:
       dockerfile: ./whisper/Dockerfile
     container_name: whisper
     restart: unless-stopped
-    ports:
-      - 8081:8080/tcp
     depends_on:
       wyoming-whisper-api-client:
         condition: service_started
