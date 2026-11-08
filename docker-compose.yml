@@ -227,7 +227,7 @@ services:
       - TS_SERVE_CONFIG=/config/serve.json
     volumes:
       - ${HOME}/tailscale/state:/var/lib/tailscale
-      - ${HOME}/tailscale/config:/config
+      - ./tailscale:/config
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
