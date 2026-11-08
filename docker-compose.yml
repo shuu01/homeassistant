@@ -213,6 +213,26 @@ services:
       - configuration:/app/configuration
     command: chown -R ${LVA_USER_ID:-1000}:${LVA_USER_GROUP:-1000} /app/local /app/configuration
 
+  tailscale:
+    container_name: tailscale
+    image: tailscale/tailscale:latest
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      # - TS_AUTHKEY=tskey-auth-xxxxx
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_HOSTNAME=ha
+      - TS_USERSPACE=false
+    volumes:
+      - ${HOME}/ts-state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    restart: unless-stopped
+
 volumes:
   wakeword_data:
   configuration:
