@@ -224,8 +224,10 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_HOSTNAME=ha
       - TS_USERSPACE=false
+      - TS_SERVE_CONFIG=/config/serve.json
     volumes:
-      - ${HOME}/ts-state:/var/lib/tailscale
+      - ${HOME}/tailscale/state:/var/lib/tailscale
+      - ${HOME}/tailscale/config:/config
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
